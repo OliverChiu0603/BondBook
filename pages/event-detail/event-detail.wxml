@@ -1,0 +1,86 @@
+<!--pages/event-detail/event-detail.wxml-->
+<view class="container">
+
+  <!-- 事件头部 -->
+  <view class="event-header" style="background:{{primaryGradient}};">
+    <text class="event-title">{{eventName}}</text>
+    <view class="header-stats">
+      <view class="hstat-item">
+        <text class="hstat-val">{{records.length}} 笔</text>
+        <text class="hstat-label">总记录</text>
+      </view>
+      <view class="hstat-divider"></view>
+      <view class="hstat-item">
+        <text class="hstat-val">¥{{totalOut}}</text>
+        <text class="hstat-label">累计送出</text>
+      </view>
+      <view class="hstat-divider"></view>
+      <view class="hstat-item">
+        <text class="hstat-val">¥{{totalIn}}</text>
+        <text class="hstat-label">累计收入</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 工具栏：搜索 + 批量日期 -->
+  <view class="toolbar">
+    <view class="search-box">
+      <text class="search-icon">🔍</text>
+      <input
+        class="search-input"
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        placeholder="搜索姓名"
+        confirm-type="search"
+      />
+      <view wx:if="{{searchKeyword}}" class="search-clear" bindtap="onClearSearch">✕</view>
+    </view>
+    <picker mode="date" value="{{batchDate}}" bindchange="onBatchDateChange">
+      <view class="btn-batch-date">
+        <text class="batch-icon">📅</text>
+        <text class="batch-text">批量设置日期</text>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 搜索结果提示 -->
+  <view wx:if="{{searchKeyword}}" class="search-hint">
+    <text>找到 {{filteredRecords.length}} 条结果</text>
+  </view>
+
+  <!-- 记录列表 -->
+  <view class="record-list" wx:if="{{filteredRecords.length > 0}}">
+    <view
+      class="record-row"
+      wx:for="{{filteredRecords}}"
+      wx:key="id"
+      bindtap="onGoDetail"
+      data-person-id="{{item.personId}}"
+    >
+      <view class="rrow-main">
+        <view class="rrow-left">
+          <text class="rrow-person">{{item.personName}}</text>
+          <text class="rrow-date">{{item.date || '日期未设置'}}</text>
+          <text wx:if="{{item.note}}" class="rrow-note">{{item.note}}</text>
+        </view>
+        <view class="rrow-right">
+          <text class="rrow-amount {{item.type === 'out' ? 'amount-out' : 'amount-in'}}">{{item.type === 'out' ? '-' : '+'}}¥{{item.amount}}</text>
+          <text class="rrow-type {{item.type === 'out' ? 'type-out' : 'type-in'}}">{{item.type === 'out' ? '送出' : '收入'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{filteredRecords.length === 0 && !loading}}" class="empty-tip">
+    <text class="empty-text">{{searchKeyword ? '未找到匹配的姓名' : '暂无记录'}}</text>
+  </view>
+
+  <!-- 新增浮动按钮 -->
+  <view class="fab-add" bindtap="onAddNew">
+    <text class="fab-icon">+</text>
+    <text class="fab-text">新增</text>
+  </view>
+
+</view>
+

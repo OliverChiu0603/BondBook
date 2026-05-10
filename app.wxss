@@ -1,0 +1,14 @@
+/**app.wxss**/
+page {
+  background-color: #F5F5F5;
+  font-size: 28rpx;
+  color: #333333;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}

@@ -1,0 +1,86 @@
+<!--pages/statistics/statistics.wxml-->
+<view class="container">
+
+  <!-- 总览卡片 -->
+  <view class="total-card" style="background:{{primaryGradient}};">
+    <text class="total-title">总览</text>
+    <view class="total-row">
+      <view class="total-item">
+        <text class="total-label">总人数</text>
+        <text class="total-num">{{personCount}} 人</text>
+      </view>
+      <view class="total-divider"></view>
+      <view class="total-item">
+        <text class="total-label">总记录</text>
+        <text class="total-num">{{recordCount}} 笔</text>
+      </view>
+      <view class="total-divider"></view>
+      <view class="total-item">
+        <text class="total-label">净差额</text>
+        <text class="total-num">{{totalIn - totalOut >= 0 ? '+' : ''}}¥{{totalIn - totalOut}}</text>
+      </view>
+    </view>
+    <view class="balance-bar">
+      <view class="balance-item">
+        <text class="bi-label">累计送出</text>
+        <text class="bi-val">¥{{totalOut}}</text>
+      </view>
+      <view class="balance-item">
+        <text class="bi-label">累计收入</text>
+        <text class="bi-val">¥{{totalIn}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 礼簿 -->
+  <view class="section" wx:if="{{eventStats.length > 0}}">
+    <text class="section-title">礼簿</text>
+    <view class="stat-card stat-card-tappable" wx:for="{{eventStats}}" wx:key="event" bindtap="onEventTap" data-event="{{item.event}}">
+      <view class="stat-head">
+        <text class="stat-name">{{item.event}}</text>
+        <text class="stat-count">{{item.count}} 笔</text>
+      </view>
+      <view class="stat-amounts">
+        <view class="stat-amount-item" wx:if="{{item.out > 0}}">
+          <text class="sa-label">送出</text>
+          <text class="sa-value text-out">¥{{item.out}}</text>
+        </view>
+        <view class="stat-amount-item" wx:if="{{item.in > 0}}">
+          <text class="sa-label">收入</text>
+          <text class="sa-value text-in">¥{{item.in}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 往来最多 TOP10 -->
+  <view class="section" wx:if="{{topPersons.length > 0}}">
+    <text class="section-title">往来金额 TOP10</text>
+    <view class="stat-card" wx:for="{{topPersons}}" wx:key="name">
+      <view class="stat-head">
+        <text class="stat-name">{{item.name}}</text>
+        <text class="stat-count">{{item.count}} 笔</text>
+      </view>
+      <view class="stat-amounts">
+        <view class="stat-amount-item" wx:if="{{item.totalOut > 0}}">
+          <text class="sa-label">送出</text>
+          <text class="sa-value text-out">¥{{item.totalOut}}</text>
+        </view>
+        <view class="stat-amount-item" wx:if="{{item.totalIn > 0}}">
+          <text class="sa-label">收入</text>
+          <text class="sa-value text-in">¥{{item.totalIn}}</text>
+        </view>
+        <view class="stat-amount-item">
+          <text class="sa-label">净差</text>
+          <text class="sa-value {{item.balance >= 0 ? 'text-in' : 'text-out'}}">{{item.balance >= 0 ? '+' : ''}}¥{{item.balance}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{personCount === 0}}" class="empty-tip">
+    <text class="empty-icon">📊</text>
+    <text class="empty-text">暂无数据，快去添加记录吧</text>
+  </view>
+
+</view>

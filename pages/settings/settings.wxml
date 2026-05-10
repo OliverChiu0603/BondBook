@@ -1,0 +1,293 @@
+<!--pages/settings/settings.wxml-->
+<view class="container theme-{{theme}}">
+
+  <!-- 账号信息 -->
+  <view class="section-title">账号</view>
+  <view class="card">
+    <!-- 用户信息 -->
+    <view class="cell cell-account" wx:if="{{hasUserInfo}}">
+      <image wx:if="{{userInfo.avatarUrl}}" class="account-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+      <view wx:else class="account-avatar-wrap" style="background:{{primaryLight}};">
+        <text class="account-avatar-icon">👤</text>
+      </view>
+      <view class="account-text">
+        <text class="account-name">{{userInfo.nickName || '微信用户'}}</text>
+        <text class="account-openid">ID: {{userInfo.openid || '***'}}</text>
+      </view>
+      <view class="account-actions">
+        <view class="account-badge" style="background:{{primaryLight}};">
+          <text class="badge-text" style="color:{{primaryColor}};">已登录</text>
+        </view>
+        <text class="account-refresh" bindtap="onRefreshUserInfo" wx:if="{{!userInfo.avatarUrl || !userInfo.nickName}}">更新信息</text>
+      </view>
+    </view>
+    <view class="cell cell-account" wx:else bindtap="onLogin">
+      <view class="account-avatar-wrap" style="background:{{primaryLight}};">
+        <text class="account-avatar-icon">👤</text>
+      </view>
+      <view class="account-text">
+        <text class="account-status-label">点击登录</text>
+        <text class="account-status-desc">登录后可使用账本分享功能</text>
+      </view>
+      <text class="cell-arrow">›</text>
+    </view>
+
+    <!-- 注销账号选项 -->
+    <view class="cell-divider" wx:if="{{hasUserInfo}}"></view>
+    <view class="cell" wx:if="{{hasUserInfo}}" bindtap="onLogout">
+      <text class="cell-label label-danger">注销账号</text>
+      <text class="cell-arrow">›</text>
+    </view>
+
+    <!-- 当前账本状态 -->
+    <view class="cell-divider"></view>
+    <view class="cell">
+      <view class="cell-main">
+        <text class="cell-label">当前模式</text>
+        <text class="cell-sublabel">{{isSharedMode ? '正在查看共享账本' : '正在查看自己的账本'}}</text>
+      </view>
+      <view class="account-badge" style="background:{{isSharedMode ? '#E8F5E9' : primaryLight}};">
+        <text class="badge-text" style="color:{{isSharedMode ? '#4CAF50' : primaryColor}};">{{isSharedMode ? '共享' : '自有'}}</text>
+      </view>
+    </view>
+
+    <view class="cell-divider"></view>
+    <view class="cell" bindtap="onSwitchBook">
+      <view class="cell-main">
+        <text class="cell-label">当前账本</text>
+        <text class="cell-sublabel">{{currentBookName || '未命名账本'}}（我的{{ownedBookCount}}本，已加入{{joinedBookCount}}本）</text>
+      </view>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell-divider"></view>
+    <view class="cell" bindtap="onCreateBook">
+      <text class="cell-label">新建账本</text>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell-divider"></view>
+    <view style="padding: 0 8rpx;">
+      <view style="font-size:22rpx;color:#bbb;margin:10rpx 0 2rpx 0;">全部账本</view>
+      <block wx:for="{{books}}" wx:key="bookId">
+        <view class="cell" style="padding:18rpx 0;" >
+          <view class="cell-main" style="flex-direction:row;align-items:center;">
+            <text style="font-size:28rpx;{{currentBookName===item.name?'color:'+primaryColor+';font-weight:600;':''}}">{{item.name}}</text>
+            <text style="font-size:20rpx;margin-left:12rpx;color:#aaa;">{{item.source==='own'?'我的':'共享'}}</text>
+            <text style="font-size:20rpx;margin-left:8rpx;color:#bbb;">({{item.shareCode}})</text>
+          </view>
+          <view style="display:flex;align-items:center;">
+            <button size="mini" style="margin-right:8rpx;" bindtap="onSwitchBook" data-bookid="{{item.bookId}}" data-source="{{item.source}}">切换</button>
+            <button size="mini" type="warn" bindtap="onBookMore" data-bookid="{{item.bookId}}" data-source="{{item.source}}">更多</button>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 共享账本 -->
+  <view class="section-title">账本共享</view>
+  <view class="card">
+    <view class="cell" bindtap="onShareTap">
+      <text class="cell-label">分享 / 加入账本</text>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell-divider"></view>
+    <view class="cell" bindtap="onViewCooperators">
+      <view class="cell-main">
+        <text class="cell-label">查看共享成员</text>
+        <text class="cell-sublabel">查看当前账本的所有成员</text>
+      </view>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell-divider"></view>
+    <view class="cell" bindtap="onViewPendingRequests" wx:if="{{!isSharedMode}}">
+      <view class="cell-main">
+        <text class="cell-label">待审批加入请求</text>
+        <text class="cell-sublabel">{{pendingRequestCount > 0 ? '有' + pendingRequestCount + '个待处理请求' : '暂无待审批请求'}}</text>
+      </view>
+      <view class="request-badge" wx:if="{{pendingRequestCount > 0}}" style="background:#FF6B35;">
+        <text class="badge-text" style="color:#fff;">{{pendingRequestCount}}</text>
+      </view>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell-divider"></view>
+    <view class="cell {{!isSharedMode ? 'cell-disabled' : ''}}" bindtap="{{isSharedMode ? 'onExitSharedView' : ''}}">
+      <view class="cell-main">
+        <text class="cell-label {{!isSharedMode ? 'label-disabled' : 'label-danger'}}">退出共享账本</text>
+        <text class="cell-sublabel">{{isSharedMode ? '退出后将回到自己的账本' : '当前未在查看他人账本，无需退出'}}</text>
+      </view>
+      <text class="cell-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 推荐给好友 -->
+  <view class="section-title">推荐</view>
+  <view class="card share-app-card">
+    <view class="share-app-desc">
+      <text class="share-app-icon">🎁</text>
+      <view class="share-app-text">
+        <text class="share-app-title">分享小程序给好友</text>
+        <text class="share-app-sub">让亲友一起管理人情账本</text>
+      </view>
+    </view>
+    <button
+      class="share-app-btn"
+      style="background:{{primaryColor}};"
+      open-type="share"
+    >📤 分享小程序</button>
+  </view>
+
+  <!-- 数据管理 -->
+  <view class="section-title">数据管理</view>
+  <view class="danger-card" bindtap="onClearData">
+    <view class="danger-icon-wrap">
+      <text class="danger-icon-text">⚠️</text>
+    </view>
+    <view class="danger-content">
+      <text class="danger-title">清空所有数据</text>
+      <text class="danger-desc">将删除全部记录，操作不可恢复</text>
+    </view>
+    <text class="danger-arrow">›</text>
+  </view>
+
+  <!-- 外观 -->
+  <view class="section-title">外观</view>
+  <view class="card">
+    <view class="cell">
+      <text class="cell-label">主题颜色</text>
+      <text class="cell-value" style="color:{{primaryColor}};">{{theme === 'orange' ? '橘橙' : theme === 'blue' ? '天蓝' : theme === 'green' ? '翠绿' : '深色'}}</text>
+    </view>
+    <view class="theme-picker">
+      <view class="theme-item {{theme === 'orange' ? 'theme-item-active' : ''}}" data-theme="orange" bindtap="onThemePick">
+        <view class="theme-dot" style="background:#FF6B35;"></view>
+        <text class="theme-name">橘橙</text>
+        <text class="theme-check" style="color:#FF6B35;" wx:if="{{theme === 'orange'}}">✓</text>
+      </view>
+      <view class="theme-item {{theme === 'blue' ? 'theme-item-active' : ''}}" data-theme="blue" bindtap="onThemePick">
+        <view class="theme-dot" style="background:#2196F3;"></view>
+        <text class="theme-name">天蓝</text>
+        <text class="theme-check" style="color:#2196F3;" wx:if="{{theme === 'blue'}}">✓</text>
+      </view>
+      <view class="theme-item {{theme === 'green' ? 'theme-item-active' : ''}}" data-theme="green" bindtap="onThemePick">
+        <view class="theme-dot" style="background:#4CAF50;"></view>
+        <text class="theme-name">翠绿</text>
+        <text class="theme-check" style="color:#4CAF50;" wx:if="{{theme === 'green'}}">✓</text>
+      </view>
+      <view class="theme-item {{theme === 'dark' ? 'theme-item-active' : ''}}" data-theme="dark" bindtap="onThemePick">
+        <view class="theme-dot theme-dot-dark"></view>
+        <text class="theme-name">深色</text>
+        <text class="theme-check" style="color:#455A64;" wx:if="{{theme === 'dark'}}">✓</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 关于 -->
+  <view class="section-title">关于</view>
+  <view class="card">
+    <view class="cell">
+      <text class="cell-label">版本</text>
+      <text class="cell-value">2.0.0</text>
+    </view>
+    <view class="cell-divider"></view>
+    <view class="cell" bindtap="onFeedback">
+      <text class="cell-label">反馈与建议</text>
+      <text class="cell-arrow">›</text>
+    </view>
+  </view>
+
+</view>
+
+<!-- 反馈弹窗 -->
+<view class="modal-mask" wx:if="{{feedbackVisible}}">
+  <view class="modal-box">
+    <text class="modal-title">反馈与建议</text>
+    <textarea
+      class="feedback-textarea"
+      placeholder="请输入您的建议或遇到的问题..."
+      value="{{feedbackText}}"
+      bindinput="onFeedbackInput"
+      maxlength="500"
+      auto-height
+    />
+    <view class="feedback-count">{{feedbackText.length}}/500</view>
+    <view class="modal-actions">
+      <view class="modal-btn-cancel" bindtap="onCloseFeedback">取消</view>
+      <view class="modal-btn-confirm" style="background:{{primaryColor}};" bindtap="onSubmitFeedback">提交</view>
+    </view>
+  </view>
+</view>
+
+<!-- 分享 modal -->
+<view class="modal-mask" wx:if="{{shareModalVisible}}" bindtap="onCloseShareModal">
+  <view class="modal-box" catchtap="">
+    <text class="modal-title">账本共享</text>
+
+    <view class="share-section">
+      <text class="share-label">我的分享码</text>
+      <view class="share-code-row">
+        <text class="share-code-text" style="color:{{primaryColor}};">{{myShareCode}}</text>
+        <view class="share-code-copy" style="color:{{primaryColor}};border-color:{{primaryColor}};" bindtap="onCopyShareCode">复制</view>
+      </view>
+      <text class="share-hint">将此码分享给家人，即可共同查看和记账</text>
+    </view>
+
+    <view class="share-divider"></view>
+
+    <view class="share-section">
+      <text class="share-label">加入他人账本</text>
+      <input
+        class="share-input"
+        placeholder="输入对方的6位分享码"
+        value="{{inputShareCode}}"
+        bindinput="onShareCodeInput"
+        maxlength="6"
+      />
+      <view class="share-join-btn" style="background:{{primaryColor}};" bindtap="onJoinSharedBook">加入账本</view>
+    </view>
+
+    <view class="share-divider"></view>
+
+    <!-- 直接分享给好友 -->
+    <view class="share-section">
+      <text class="share-label">分享给好友</text>
+      <button
+        class="share-friend-btn"
+        style="background:{{primaryColor}};"
+        open-type="share"
+      >📤 发送给朋友</button>
+      <text class="share-hint">好友点击链接后直接加入你的账本</text>
+    </view>
+
+    <view class="modal-cancel" bindtap="onCloseShareModal">关闭</view>
+  </view>
+</view>
+
+<!-- 共享成员列表 modal -->
+<view class="modal-mask" wx:if="{{cooperatorsModalVisible}}" bindtap="onCloseCooperatorsModal">
+  <view class="modal-box" catchtap="">
+    <text class="modal-title">账本成员</text>
+    
+    <scroll-view class="cooperators-list" scroll-y>
+      <view class="cooperator-item" wx:for="{{cooperatorsList}}" wx:key="openid">
+        <image class="cooperator-avatar" src="{{item.avatarUrl || '/images/default-avatar.png'}}" mode="aspectFill"></image>
+        <view class="cooperator-info">
+          <view class="cooperator-name-row">
+            <text class="cooperator-name">{{item.nickName || '未命名用户'}}</text>
+            <view class="cooperator-role {{item.role === 'owner' ? 'role-owner' : 'role-cooperator'}}" style="{{item.role === 'owner' ? 'background:' + primaryColor : ''}}">
+              {{item.role === 'owner' ? '创建者' : '协作者'}}
+            </view>
+          </view>
+          <text class="cooperator-openid">{{item.openid}}</text>
+        </view>
+        <view class="cooperator-action" 
+              wx:if="{{currentUserRole === 'owner' && item.role === 'cooperator'}}"
+              bindtap="onRemoveCooperator"
+              data-openid="{{item.openid}}"
+              data-nickname="{{item.nickName}}">
+          <text class="action-remove">移除</text>
+        </view>
+      </view>
+    </scroll-view>
+    
+    <view class="modal-cancel" bindtap="onCloseCooperatorsModal">关闭</view>
+  </view>
+</view>

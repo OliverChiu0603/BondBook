@@ -1,0 +1,184 @@
+<!--pages/detail/detail.wxml-->
+<view class="container" wx:if="{{person}}">
+
+  <!-- 人名头部 -->
+  <view class="detail-header">
+    <view class="header-avatar">
+      <text class="header-avatar-text">{{person.name[0]}}</text>
+    </view>
+    <view class="header-name-row">
+      <text class="header-name">{{person.name}}</text>
+      <view class="btn-edit-name" bindtap="onEditName">
+        <text class="edit-name-icon">✎</text>
+      </view>
+    </view>
+    <view class="header-stats">
+      <view class="hstat-item">
+        <text class="hstat-val">¥{{totalIn}}</text>
+        <text class="hstat-label">收入</text>
+      </view>
+      <view class="hstat-divider"></view>
+      <view class="hstat-item">
+        <text class="hstat-val">¥{{totalOut}}</text>
+        <text class="hstat-label">送出</text>
+      </view>
+      <view class="hstat-divider"></view>
+      <view class="hstat-item">
+        <text class="hstat-val {{totalIn - totalOut >= 0 ? 'val-pos' : 'val-neg'}}">{{totalIn - totalOut >= 0 ? '+' : ''}}¥{{totalIn - totalOut}}</text>
+        <text class="hstat-label">净差</text>
+      </view>
+    </view>
+
+    <view class="binding-panel">
+      <view class="binding-title-row">
+        <text class="binding-title">家庭绑定</text>
+        <view class="btn-manage-binding" bindtap="onOpenBindModal">管理绑定</view>
+      </view>
+
+      <view wx:if="{{boundPersons.length > 0}}" class="bound-list">
+        <view
+          wx:for="{{boundPersons}}"
+          wx:key="id"
+          class="bound-item"
+          data-id="{{item.id}}"
+          bindtap="onBoundPersonTap"
+        >
+          <view class="bound-left">
+            <text class="bound-name">{{item.name}}</text>
+            <text class="bound-sub">共{{item.records.length}}条 · 收入¥{{item.totalIn}} · 送出¥{{item.totalOut}}</text>
+          </view>
+          <text class="bound-balance {{item.balance >= 0 ? 'val-pos' : 'val-neg'}}">{{item.balance >= 0 ? '+' : ''}}¥{{item.balance}}</text>
+        </view>
+      </view>
+
+      <view wx:else class="bound-empty">暂未绑定其他成员</view>
+    </view>
+  </view>
+
+  <!-- 事项列表 -->
+  <view class="section-title-row">
+    <text class="section-title">所有事项 ({{person.records.length}})</text>
+    <view class="btn-add-record" bindtap="onAddRecord">
+      <text>+ 新增事项</text>
+    </view>
+  </view>
+
+  <view class="record-list">
+    <view
+      wx:for="{{person.records}}"
+      wx:key="id"
+      class="record-row"
+    >
+      <view class="rrow-main">
+        <view class="rrow-left">
+          <text class="rrow-event">{{item.event}}</text>
+          <text class="rrow-date">{{item.date || '日期未设置'}}</text>
+          <text wx:if="{{item.note}}" class="rrow-note">{{item.note}}</text>
+        </view>
+        <view class="rrow-right">
+          <text class="rrow-amount {{item.type === 'out' ? 'amount-out' : 'amount-in'}}">{{item.type === 'out' ? '-' : '+'}}¥{{item.amount}}</text>
+          <text class="rrow-type {{item.type === 'out' ? 'type-out' : 'type-in'}}">{{item.type === 'out' ? '送出' : '收入'}}</text>
+        </view>
+      </view>
+      <view class="rrow-actions">
+        <view class="btn-edit" data-record-id="{{item.id}}" bindtap="onEditRecord">编辑</view>
+        <view class="btn-del" data-record-id="{{item.id}}" bindtap="onDeleteRecord">删除</view>
+      </view>
+    </view>
+  </view>
+
+
+</view>
+
+<!-- 编辑姓名 modal -->
+<view class="modal-mask" wx:if="{{editNameVisible}}">
+  <view class="modal-backdrop" bindtap="onCancelEdit"></view>
+  <view class="modal-box" catchtap="onModalInnerTap">
+    <text class="modal-title">修改姓名</text>
+    <input
+      class="modal-input"
+      value="{{editNameValue}}"
+      bindinput="onNameInput"
+      placeholder="请输入新姓名"
+      maxlength="20"
+      focus="{{editNameVisible}}"
+    />
+    <view class="modal-actions">
+      <view class="modal-btn modal-btn-cancel" bindtap="onCancelEdit">取消</view>
+      <view class="modal-btn modal-btn-confirm" bindtap="onSaveName">保存</view>
+    </view>
+  </view>
+</view>
+
+<!-- 管理绑定 modal -->
+<view class="modal-mask" wx:if="{{bindModalVisible}}">
+  <view class="modal-backdrop" bindtap="onCancelBindModal"></view>
+  <view class="modal-box bind-modal-box" catchtap="onModalInnerTap">
+    <text class="modal-title">管理家庭绑定</text>
+
+    <view class="bind-search-row">
+      <input
+        class="bind-search-input"
+        value="{{bindSearchKeyword}}"
+        bindinput="onBindSearchInput"
+        placeholder="搜索姓名"
+        maxlength="20"
+      />
+      <view wx:if="{{bindSearchKeyword}}" class="btn-clear-bind-search" bindtap="onClearBindSearch">清除</view>
+    </view>
+
+    <view wx:if="{{bindCandidates.length === 0}}" class="bind-empty">没有匹配成员</view>
+
+    <checkbox-group wx:else bindchange="onBindSelectionChange" class="bind-candidate-group">
+      <view wx:if="{{bindPinnedCandidates.length > 0}}" class="bind-pinned-section">
+        <label wx:for="{{bindPinnedCandidates}}" wx:key="id" class="bind-candidate-row bind-candidate-row-pinned">
+          <view class="bind-candidate-left">
+            <text class="bind-candidate-name">{{item.name}}</text>
+          </view>
+          <checkbox value="{{item.id}}" checked="{{item.checked}}" color="#FF6B35" />
+        </label>
+      </view>
+
+      <scroll-view wx:if="{{bindOtherCandidates.length > 0}}" scroll-y class="bind-candidate-scroll">
+        <label wx:for="{{bindOtherCandidates}}" wx:key="id" class="bind-candidate-row">
+          <view class="bind-candidate-left">
+            <text class="bind-candidate-name">{{item.name}}</text>
+          </view>
+          <checkbox value="{{item.id}}" checked="{{item.checked}}" color="#FF6B35" />
+        </label>
+      </scroll-view>
+    </checkbox-group>
+
+    <view class="modal-actions">
+      <view class="modal-btn modal-btn-cancel" bindtap="onCancelBindModal">取消</view>
+      <view class="modal-btn modal-btn-confirm" bindtap="onSaveBindings">保存</view>
+    </view>
+  </view>
+</view>
+
+<!-- 保存绑定确认框 -->
+<view class="modal-mask modal-mask-confirm" wx:if="{{bindConfirmVisible}}">
+  <view class="modal-backdrop" bindtap="onCancelBindConfirm"></view>
+  <view class="modal-box bind-confirm-box" catchtap="onModalInnerTap">
+    <text class="modal-title">确认绑定关系</text>
+
+    <view class="bind-confirm-content" wx:if="{{bindConfirmNames.length > 0}}">
+      <text class="bind-confirm-text">是否确认与</text>
+      <text class="bind-confirm-names">{{bindConfirmNamesText}}</text>
+      <text class="bind-confirm-text">绑定家庭关系？</text>
+    </view>
+
+    <view class="bind-confirm-content" wx:else>
+      <text class="bind-confirm-text">是否确认清空当前家庭绑定关系？</text>
+    </view>
+
+    <view class="modal-actions">
+      <view class="modal-btn modal-btn-cancel" bindtap="onCancelBindConfirm">取消</view>
+      <view class="modal-btn modal-btn-confirm" bindtap="onConfirmSaveBindings">确认</view>
+    </view>
+  </view>
+</view>
+
+<view wx:else class="not-found">
+  <text>记录不存在</text>
+</view>

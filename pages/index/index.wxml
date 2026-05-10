@@ -1,0 +1,215 @@
+<!--pages/index/index.wxml-->
+<view class="container">
+
+  <!-- 共享模式提示横幅 -->
+  <view class="shared-banner" wx:if="{{isSharedMode}}">
+    <text class="shared-banner-text">📖 正在查看共享账本</text>
+  </view>
+
+  <!-- 总览卡片 -->
+  <view class="summary-card" style="background:{{primaryGradient}};">
+    <view class="summary-item">
+      <text class="summary-label">总人数</text>
+      <text class="summary-amount">{{personCount}} 人</text>
+    </view>
+    <view class="summary-divider"></view>
+    <view class="summary-item">
+      <text class="summary-label">累计送出</text>
+      <text class="summary-amount">¥{{totalOut}}</text>
+    </view>
+    <view class="summary-divider"></view>
+    <view class="summary-item">
+      <text class="summary-label">累计收入</text>
+      <text class="summary-amount">¥{{totalIn}}</text>
+    </view>
+  </view>
+
+  <!-- 搜索框 -->
+  <view class="search-box">
+    <text class="search-icon">🔍</text>
+    <input
+      class="search-input"
+      placeholder="搜索姓名..."
+      value="{{searchKeyword}}"
+      bindinput="onSearchInput"
+    />
+  </view>
+
+  <!-- 筛选标签 -->
+  <view class="filter-tabs">
+    <view class="filter-tab" style="{{activeFilter === 'all' ? 'background:' + primaryColor + ';color:#fff;font-weight:bold;border-radius:8rpx;' : ''}}" data-filter="all" bindtap="onFilterTap">全部 ({{personCount}})</view>
+    <view class="filter-tab" style="{{activeFilter === 'out' ? 'background:' + primaryColor + ';color:#fff;font-weight:bold;border-radius:8rpx;' : ''}}" data-filter="out" bindtap="onFilterTap">有送出</view>
+    <view class="filter-tab" style="{{activeFilter === 'in' ? 'background:' + primaryColor + ';color:#fff;font-weight:bold;border-radius:8rpx;' : ''}}" data-filter="in" bindtap="onFilterTap">有收入</view>
+  </view>
+
+  <!-- 人员列表 -->
+  <view class="person-list">
+    <!-- 新用户引导卡片 -->
+    <view wx:if="{{filteredPersons.length === 0 && personCount === 0}}" class="empty-guide-card">
+      <view class="empty-guide-icon">👋</view>
+      <text class="empty-guide-title">欢迎使用礼簿BondBook</text>
+      <text class="empty-guide-desc">开始记录您的人情往来</text>
+      
+      <view class="empty-guide-actions">
+        <view class="guide-action-item" bindtap="onGuideAddPerson">
+          <view class="guide-action-icon" style="background:{{primaryLight}};">
+            <text style="color:{{primaryColor}};">➕</text>
+          </view>
+          <text class="guide-action-title">添加人员</text>
+          <text class="guide-action-desc">记录新的人情往来</text>
+        </view>
+        
+        <view class="guide-action-item" bindtap="onGuideJoinBook">
+          <view class="guide-action-icon" style="background:{{primaryLight}};">
+            <text style="color:{{primaryColor}};">📖</text>
+          </view>
+          <text class="guide-action-title">加入账本</text>
+          <text class="guide-action-desc">查看家人共享的账本</text>
+        </view>
+      </view>
+      
+      <view class="empty-guide-tip">
+        <text class="tip-icon">💡</text>
+        <text class="tip-text">您也可以点击右下角的 + 号快速添加</text>
+      </view>
+    </view>
+
+    <!-- 搜索无结果提示 -->
+    <view wx:if="{{filteredPersons.length === 0 && personCount > 0}}" class="empty-tip">
+      <text class="empty-icon">🔍</text>
+      <text class="empty-text">未找到相关记录</text>
+    </view>
+
+    <view
+      wx:for="{{filteredPersons}}"
+      wx:key="id"
+      class="person-card"
+      data-id="{{item.id}}"
+      bindtap="onPersonTap"
+    >
+      <view class="person-left">
+        <view class="person-avatar" style="background:{{primaryGradient}};">
+          <text class="avatar-text">{{item.name[0]}}</text>
+        </view>
+      </view>
+      <view class="person-middle">
+        <view class="person-name-row">
+          <text class="person-name">{{item.name}}</text>
+          <text class="record-count-badge">{{item.recordCount}} 笔</text>
+        </view>
+        <view class="event-tags">
+          <text
+            wx:for="{{item.eventTags}}"
+            wx:key="*this"
+            wx:for-item="tag"
+            class="event-tag"
+            style="color:{{primaryColor}};background:{{primaryLight}};"
+          >{{tag}}</text>
+        </view>
+      </view>
+      <view class="person-right">
+        <text class="person-balance {{item.balance >= 0 ? 'balance-pos' : 'balance-neg'}}">{{item.balance >= 0 ? '+' : ''}}¥{{item.balance}}</text>
+        <text class="person-detail-hint">›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 悬浮添加按钮（共享模式下隐藏）-->
+  <view class="fab" style="background:{{primaryColor}};" bindtap="onAddTap" wx:if="{{!isSharedMode}}">
+    <text class="fab-icon">+</text>
+  </view>
+
+  <!-- 登录引导弹窗 -->
+  <view class="login-guide-mask" wx:if="{{showLoginGuide}}" catchtap="onCloseLoginGuide">
+    <view class="login-guide-box" catchtap="">
+      <view class="login-guide-icon">👋</view>
+      <text class="login-guide-title">欢迎使用礼簿BondBook</text>
+      <text class="login-guide-desc">登录后可使用账本分享等完整功能</text>
+      
+      <view class="login-guide-benefits">
+        <view class="benefit-item">
+          <text class="benefit-icon">✓</text>
+          <text class="benefit-text">与家人共享账本</text>
+        </view>
+        <view class="benefit-item">
+          <text class="benefit-icon">✓</text>
+          <text class="benefit-text">数据云端同步</text>
+        </view>
+        <view class="benefit-item">
+          <text class="benefit-icon">✓</text>
+          <text class="benefit-text">多设备访问</text>
+        </view>
+      </view>
+
+      <button 
+        class="login-guide-btn" 
+        style="background:{{primaryColor}};" 
+        bindtap="onLoginGuide"
+      >立即登录</button>
+      
+      <text class="login-guide-skip" bindtap="onSkipLogin">暂不登录</text>
+    </view>
+  </view>
+
+  <!-- 自定义添加菜单弹窗 -->
+  <view class="add-menu-mask" wx:if="{{showAddMenu}}" catchtap="onCloseAddMenu">
+    <view class="add-menu-box" catchtap="">
+      <view class="add-menu-title">选择添加方式</view>
+      
+      <view class="add-menu-option" data-type="single" bindtap="onAddMenuSelect">
+        <view class="add-menu-icon" style="background:{{primaryLight}};">
+          <text style="color:{{primaryColor}};font-size:40rpx;">👤</text>
+        </view>
+        <view class="add-menu-text">
+          <text class="option-title">单条新增</text>
+          <text class="option-desc">添加一个人的记录</text>
+        </view>
+        <text class="add-menu-arrow">›</text>
+      </view>
+
+      <view class="add-menu-divider"></view>
+
+      <view class="add-menu-option" data-type="batch" bindtap="onAddMenuSelect">
+        <view class="add-menu-icon" style="background:{{primaryLight}};">
+          <text style="color:{{primaryColor}};font-size:40rpx;">👥</text>
+        </view>
+        <view class="add-menu-text">
+          <text class="option-title">批量新增</text>
+          <text class="option-desc">一次添加多个人的记录</text>
+        </view>
+        <text class="add-menu-arrow">›</text>
+      </view>
+
+      <view class="add-menu-cancel" bindtap="onCloseAddMenu">
+        <text>取消</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 自定义加入账本弹窗 -->
+  <view class="join-book-mask" wx:if="{{showJoinBookModal}}" catchtap="onCloseJoinBookModal">
+    <view class="join-book-box" catchtap="stopPropagation">
+      <view class="join-book-title">加入账本</view>
+      <text class="join-book-desc">请输入好友分享的账本分享码</text>
+      
+      <input 
+        class="join-book-input" 
+        placeholder="输入分享码（如：ABC123）"
+        value="{{joinBookShareCode}}"
+        bindinput="onJoinBookShareCodeInput"
+        maxlength="6"
+        style="border-color:{{primaryColor}};"
+      />
+      
+      <view class="join-book-actions">
+        <view class="join-book-cancel" catchtap="onCloseJoinBookModal">
+          取消
+        </view>
+        <view class="join-book-confirm" style="background:{{primaryColor}};" catchtap="onConfirmJoinBook">
+          加入
+        </view>
+      </view>
+    </view>
+  </view>
+
+</view>

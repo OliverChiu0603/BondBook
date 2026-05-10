@@ -1,0 +1,104 @@
+<!--pages/batch-add/batch-add.wxml-->
+<view class="container">
+
+  <!-- 共享设置区 -->
+  <view class="shared-card">
+    <view class="shared-title">公共设置（所有记录共用）</view>
+
+    <!-- 事件 -->
+    <view class="shared-row">
+      <text class="shared-label">事件</text>
+      <picker mode="selector" range="{{eventTypes}}" value="{{eventTypeIndex}}" bindchange="onEventChange">
+        <view class="picker-row">
+          <text class="picker-val">{{isCustomEvent ? '自定义' : form.event}}</text>
+          <text class="picker-arrow">›</text>
+        </view>
+      </picker>
+    </view>
+
+    <!-- 自定义事件输入 -->
+    <view class="shared-row" wx:if="{{isCustomEvent}}">
+      <text class="shared-label">事件名</text>
+      <input
+        class="custom-event-input"
+        placeholder="请输入自定义事件名称"
+        value="{{customEvent}}"
+        bindinput="onCustomEventInput"
+        maxlength="30"
+      />
+    </view>
+
+    <!-- 日期 -->
+    <view class="shared-row">
+      <text class="shared-label">日期</text>
+      <picker mode="date" value="{{form.date}}" bindchange="onDateChange">
+        <view class="picker-row">
+          <text class="picker-val">{{form.date || '请选择'}}</text>
+          <text class="picker-arrow">›</text>
+        </view>
+      </picker>
+    </view>
+
+    <!-- 方向 -->
+    <view class="shared-row">
+      <text class="shared-label">方向</text>
+      <view class="type-selector">
+        <view class="type-btn {{form.type === 'out' ? 'type-out-active' : ''}}" data-type="out" bindtap="onTypeTap">送出</view>
+        <view class="type-btn {{form.type === 'in' ? 'type-in-active' : ''}}" data-type="in" bindtap="onTypeTap">收入</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 列表头 -->
+  <view class="list-header">
+    <text class="list-header-name">姓名</text>
+    <text class="list-header-amount">金额（¥）</text>
+    <text class="list-header-note">备注</text>
+    <view class="list-header-del"></view>
+  </view>
+
+  <!-- 记录行 -->
+  <view class="rows-wrap">
+    <view class="record-row" wx:for="{{rows}}" wx:key="_key">
+      <input
+        class="row-input row-name"
+        placeholder="姓名"
+        value="{{item.name}}"
+        data-idx="{{index}}"
+        bindinput="onNameInput"
+        maxlength="20"
+      />
+      <input
+        class="row-input row-amount"
+        placeholder="0"
+        type="digit"
+        value="{{item.amount}}"
+        data-idx="{{index}}"
+        bindinput="onAmountInput"
+      />
+      <input
+        class="row-input row-note"
+        placeholder="备注"
+        value="{{item.note}}"
+        data-idx="{{index}}"
+        bindinput="onNoteInput"
+        maxlength="50"
+      />
+      <view class="row-del" data-idx="{{index}}" bindtap="onDeleteRow">
+        <text class="row-del-icon">✕</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 添加一行 -->
+  <view class="add-row-btn" bindtap="onAddRow">
+    <text class="add-row-icon">+</text>
+    <text class="add-row-text">添加一行</text>
+  </view>
+
+  <!-- 提交 -->
+  <button class="submit-btn" bindtap="onSubmit" disabled="{{submitting}}">
+    批量保存
+  </button>
+
+</view>

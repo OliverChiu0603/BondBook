@@ -1,0 +1,91 @@
+<!--pages/add/add.wxml-->
+<view class="container">
+  <view class="form-card">
+
+    <!-- 姓名 -->
+    <view class="form-item">
+      <text class="form-label">姓名</text>
+      <view wx:if="{{nameDisabled}}" class="name-locked">
+        <text class="name-locked-text">{{form.name}}</text>
+        <text class="name-locked-tag">已锁定</text>
+      </view>
+      <input
+        wx:else
+        class="form-input"
+        placeholder="请输入对方姓名"
+        value="{{form.name}}"
+        bindinput="onNameInput"
+        maxlength="20"
+      />
+    </view>
+
+    <!-- 事件类型 -->
+    <view class="form-item">
+      <text class="form-label">事件</text>
+      <view wx:if="{{eventDisabled}}" class="picker-row">
+        <text class="picker-val">{{form.event}}</text>
+        <text class="name-locked-tag">已锁定</text>
+      </view>
+      <block wx:else>
+        <picker mode="selector" range="{{eventTypes}}" value="{{eventTypeIndex}}" bindchange="onEventChange">
+          <view class="picker-row">
+            <text class="picker-val">{{isCustomEvent ? '自定义' : form.event}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+      </block>
+    </view>
+
+    <!-- 自定义事件输入 -->
+    <view class="form-item" wx:if="{{isCustomEvent && !eventDisabled}}">
+      <text class="form-label">事件名</text>
+      <input
+        class="form-input"
+        placeholder="请输入自定义事件名称"
+        value="{{customEvent}}"
+        bindinput="onCustomEventInput"
+        maxlength="30"
+      />
+    </view>
+
+    <!-- 日期 -->
+    <view class="form-item">
+      <text class="form-label">日期</text>
+      <picker mode="date" value="{{form.date}}" bindchange="onDateChange">
+        <view class="picker-row">
+          <text class="picker-val">{{form.date || '请选择日期'}}</text>
+          <text class="picker-arrow">›</text>
+        </view>
+      </picker>
+    </view>
+
+    <!-- 方向 -->
+    <view class="form-item">
+      <text class="form-label">方向</text>
+      <view class="type-selector">
+        <view class="type-btn {{form.type === 'out' ? 'type-out-active' : ''}}" data-type="out" bindtap="onTypeTap">送出</view>
+        <view class="type-btn {{form.type === 'in' ? 'type-in-active' : ''}}" data-type="in" bindtap="onTypeTap">收入</view>
+      </view>
+    </view>
+
+    <!-- 金额 -->
+    <view class="form-item">
+      <text class="form-label">金额</text>
+      <view class="amount-row">
+        <text class="amount-symbol">¥</text>
+        <input class="amount-input" type="digit" placeholder="0" value="{{form.amount}}" bindinput="onAmountInput" />
+      </view>
+    </view>
+
+    <!-- 备注 -->
+    <view class="form-item form-item-note">
+      <text class="form-label">备注</text>
+      <textarea class="form-textarea" placeholder="添加备注（选填）" value="{{form.note}}" bindinput="onNoteInput" maxlength="200" />
+    </view>
+
+  </view>
+
+  <button class="submit-btn" bindtap="onSubmit">
+    {{mode === 'edit' ? '保存修改' : '添加记录'}}
+  </button>
+</view>
