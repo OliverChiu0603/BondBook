@@ -18,7 +18,7 @@
         <view class="account-badge" style="background:{{primaryLight}};">
           <text class="badge-text" style="color:{{primaryColor}};">已登录</text>
         </view>
-        <text class="account-refresh" bindtap="onRefreshUserInfo" wx:if="{{!userInfo.avatarUrl || !userInfo.nickName}}">更新信息</text>
+        <text class="account-refresh" bindtap="onRefreshUserInfo">编辑资料</text>
       </view>
     </view>
     <view class="cell cell-account" wx:else bindtap="onLogin">
@@ -30,6 +30,31 @@
         <text class="account-status-desc">登录后可使用账本分享功能</text>
       </view>
       <text class="cell-arrow">›</text>
+    </view>
+
+    <view class="profile-editor" wx:if="{{profileEditorVisible}}">
+      <button class="profile-avatar-button" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image wx:if="{{profileDraft.avatarUrl}}" class="profile-avatar-preview" src="{{profileDraft.avatarUrl}}" mode="aspectFill"></image>
+        <view wx:else class="profile-avatar-placeholder" style="background:{{primaryLight}};">
+          <text class="account-avatar-icon">👤</text>
+        </view>
+        <text class="profile-avatar-text">选择头像</text>
+      </button>
+      <view class="profile-nickname-row">
+        <text class="profile-label">昵称</text>
+        <input
+          class="profile-nickname-input"
+          type="nickname"
+          placeholder="填写微信昵称"
+          value="{{profileDraft.nickName}}"
+          bindinput="onNicknameInput"
+          bindblur="onNicknameInput"
+        />
+      </view>
+      <view class="profile-actions">
+        <button class="profile-button profile-button-secondary" bindtap="onCancelProfileEdit">取消</button>
+        <button class="profile-button profile-button-primary" loading="{{savingUserInfo}}" bindtap="onSaveUserProfile">保存</button>
+      </view>
     </view>
 
     <!-- 注销账号选项 -->
@@ -218,7 +243,7 @@
 
 <!-- 分享 modal -->
 <view class="modal-mask" wx:if="{{shareModalVisible}}" bindtap="onCloseShareModal">
-  <view class="modal-box" catchtap="">
+  <view class="modal-box" catchtap="noop">
     <text class="modal-title">账本共享</text>
 
     <view class="share-section">
@@ -263,12 +288,15 @@
 
 <!-- 共享成员列表 modal -->
 <view class="modal-mask" wx:if="{{cooperatorsModalVisible}}" bindtap="onCloseCooperatorsModal">
-  <view class="modal-box" catchtap="">
+  <view class="modal-box" catchtap="noop">
     <text class="modal-title">账本成员</text>
     
     <scroll-view class="cooperators-list" scroll-y>
       <view class="cooperator-item" wx:for="{{cooperatorsList}}" wx:key="openid">
-        <image class="cooperator-avatar" src="{{item.avatarUrl || '/images/default-avatar.png'}}" mode="aspectFill"></image>
+        <image wx:if="{{item.avatarUrl}}" class="cooperator-avatar" src="{{item.avatarUrl}}" mode="aspectFill"></image>
+        <view wx:else class="cooperator-avatar cooperator-avatar-placeholder" style="background:{{primaryLight}};">
+          <text class="cooperator-avatar-icon">👤</text>
+        </view>
         <view class="cooperator-info">
           <view class="cooperator-name-row">
             <text class="cooperator-name">{{item.nickName || '未命名用户'}}</text>
@@ -289,5 +317,45 @@
     </scroll-view>
     
     <view class="modal-cancel" bindtap="onCloseCooperatorsModal">关闭</view>
+  </view>
+</view>
+
+<!-- 待审批用户列表 modal -->
+<view class="modal-mask" wx:if="{{pendingUsersModalVisible}}" bindtap="onClosePendingUsersModal">
+  <view class="modal-box" catchtap="noop">
+    <text class="modal-title">待审批加入请求</text>
+    
+    <scroll-view class="cooperators-list" scroll-y>
+      <view class="cooperator-item" wx:for="{{pendingUsersList}}" wx:key="openid">
+        <image wx:if="{{item.avatarUrl}}" class="cooperator-avatar" src="{{item.avatarUrl}}" mode="aspectFill"></image>
+        <view wx:else class="cooperator-avatar cooperator-avatar-placeholder" style="background:{{primaryLight}};">
+          <text class="cooperator-avatar-icon">👤</text>
+        </view>
+        <view class="cooperator-info">
+          <view class="cooperator-name-row">
+            <text class="cooperator-name">{{item.nickName || '微信用户'}}</text>
+            <view class="pending-badge">待审批</view>
+          </view>
+          <text class="cooperator-openid">{{item.openid}}</text>
+        </view>
+        <view class="pending-actions">
+          <view class="action-reject" 
+                bindtap="onRejectPendingUser"
+                data-openid="{{item.openid}}"
+                data-nickname="{{item.nickName}}">
+            拒绝
+          </view>
+          <view class="action-approve" 
+                style="background:{{primaryColor}};"
+                bindtap="onApprovePendingUser"
+                data-openid="{{item.openid}}"
+                data-nickname="{{item.nickName}}">
+            批准
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    
+    <view class="modal-cancel" bindtap="onClosePendingUsersModal">关闭</view>
   </view>
 </view>

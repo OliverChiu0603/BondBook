@@ -79,7 +79,20 @@ App({
     // 1. 获取 openid 和用户信息
     const loginRes = await wx.cloud.callFunction({ name: 'login' })
     this.globalData.openid = loginRes.result.openid
-    this.globalData.userInfo = loginRes.result.userInfo || null
+    const cloudUserInfo = loginRes.result.userInfo || null
+    const localUserInfo = wx.getStorageSync('user_info')
+    const localProfile = localUserInfo && typeof localUserInfo === 'object' ? localUserInfo : {}
+    if (cloudUserInfo || localProfile.avatarUrl || localProfile.nickName) {
+      this.globalData.userInfo = {
+        avatarUrl: (cloudUserInfo && cloudUserInfo.avatarUrl) || localProfile.avatarUrl || '',
+        nickName: (cloudUserInfo && cloudUserInfo.nickName && cloudUserInfo.nickName !== '微信用户')
+          ? cloudUserInfo.nickName
+          : (localProfile.nickName || (cloudUserInfo && cloudUserInfo.nickName) || '')
+      }
+      wx.setStorageSync('user_info', this.globalData.userInfo)
+    } else {
+      this.globalData.userInfo = null
+    }
 
     // 2. 多账本初始化
     await this._ensureBooksReady()
@@ -95,6 +108,7 @@ App({
       data: { userInfo }
     })
     this.globalData.userInfo = res.result.userInfo || userInfo
+    wx.setStorageSync('user_info', this.globalData.userInfo)
     return this.globalData.userInfo
   },
 
@@ -159,9 +173,101 @@ App({
     wx.setStorageSync('joined_books', list || [])
   },
 
+  _getPendingJoinCodes() {
+    const list = wx.getStorageSync('pending_join_codes')
+    if (!Array.isArray(list)) return []
+    return [...new Set(list.map(code => this._normalizeShareCode(code)).filter(code => this._isValidShareCode(code)))]
+  },
+
+  _savePendingJoinCodes(list) {
+    wx.setStorageSync('pending_join_codes', list || [])
+  },
+
+  _rememberPendingJoinCode(shareCode) {
+    const code = this._normalizeShareCode(shareCode)
+    if (!this._isValidShareCode(code)) return
+    const list = this._getPendingJoinCodes()
+    if (!list.includes(code)) list.unshift(code)
+    this._savePendingJoinCodes(list.slice(0, 20))
+  },
+
+  _forgetPendingJoinCode(shareCode) {
+    const code = this._normalizeShareCode(shareCode)
+    this._savePendingJoinCodes(this._getPendingJoinCodes().filter(item => item !== code))
+  },
+
+  async syncPendingJoinRequests() {
+    await this.waitForReady()
+    const codes = this._getPendingJoinCodes()
+    if (!codes.length) return { joined: false }
+
+    for (const code of codes) {
+      const res = await this.joinSharedBook(code, { skipRequest: true })
+      if (res.success) {
+        this._forgetPendingJoinCode(code)
+        return { joined: true, code, result: res }
+      }
+      if (!res.needApproval && !res.hasPending) {
+        this._forgetPendingJoinCode(code)
+      }
+    }
+
+    return { joined: false }
+  },
+
+  _removeJoinedBook(bookId) {
+    const next = this._getStoredJoinedBooks().filter(item => item.bookId !== bookId)
+    this._saveJoinedBooks(next)
+    this.globalData.joinedBooks = next
+    return next
+  },
+
+  async _switchToFirstOwnedBook() {
+    const owned = await this._refreshOwnedBooks()
+    const target = owned[0]
+    if (!target) return false
+    this._setActiveBook({
+      source: 'own',
+      bookId: target._id,
+      shareCode: target.shareCode,
+      name: target.name || '默认账本'
+    })
+    return true
+  },
+
+  async _validateJoinedBooks(ownedBooks) {
+    const ownedIds = new Set((ownedBooks || []).map(b => b._id))
+    const ownedCodes = new Set((ownedBooks || []).map(b => this._normalizeShareCode(b.shareCode)))
+    const valid = []
+
+    for (const item of this._getStoredJoinedBooks()) {
+      if (ownedIds.has(item.bookId) || ownedCodes.has(item.shareCode)) continue
+
+      try {
+        const res = await wx.cloud.callFunction({
+          name: 'getSharedPersons',
+          data: { shareCode: item.shareCode }
+        })
+        if (res.result && res.result.success && !res.result.isOwner) {
+          valid.push({
+            ...item,
+            bookId: res.result.bookId || item.bookId,
+            name: res.result.bookName || item.name || '共享账本'
+          })
+        }
+      } catch (e) {
+        console.warn('验证共享账本失败：', e)
+      }
+    }
+
+    this._saveJoinedBooks(valid)
+    this.globalData.joinedBooks = valid
+    return valid
+  },
+
   async _ensureBooksReady() {
     const db = wx.cloud.database()
-    const booksRes = await db.collection('books').orderBy('updateTime', 'desc').get()
+    const booksRes = await db.collection('books').where({ ownerOpenid: this.globalData.openid }).orderBy('updateTime', 'desc').get()
     let ownedBooks = booksRes.data || []
 
     // 全新用户：创建第一本账本
@@ -176,7 +282,11 @@ App({
           shareCode: firstShareCode,
           createTime: Date.now(),
           updateTime: Date.now(),
-          ownerOpenid: this.globalData.openid
+          ownerOpenid: this.globalData.openid,
+          approvedUsers: [],
+          pendingUsers: [],
+          cooperators: [],
+          deletedUsers: []
         }
       })
       ownedBooks = [{
@@ -186,12 +296,16 @@ App({
         shareCode: firstShareCode,
         createTime: Date.now(),
         updateTime: Date.now(),
-        ownerOpenid: this.globalData.openid
+        ownerOpenid: this.globalData.openid,
+        approvedUsers: [],
+        pendingUsers: [],
+        cooperators: [],
+        deletedUsers: []
       }]
     }
 
     this.globalData.ownedBooks = ownedBooks
-    this.globalData.joinedBooks = this._getStoredJoinedBooks()
+    this.globalData.joinedBooks = await this._validateJoinedBooks(ownedBooks)
 
     const saved = wx.getStorageSync('active_book_ctx')
     const ownMap = new Map(ownedBooks.map(b => [b._id, b]))
@@ -245,7 +359,7 @@ App({
 
   async _refreshOwnedBooks() {
     const db = wx.cloud.database()
-    const res = await db.collection('books').orderBy('updateTime', 'desc').get()
+    const res = await db.collection('books').where({ ownerOpenid: this.globalData.openid }).orderBy('updateTime', 'desc').get()
     this.globalData.ownedBooks = res.data || []
     return this.globalData.ownedBooks
   },
@@ -282,7 +396,12 @@ App({
         name: 'getSharedPersons',
         data: { shareCode: this.globalData.activeShareCode }
       })
-      return (res.result && res.result.success) ? res.result.persons : []
+      if (res.result && res.result.success && !res.result.isOwner) {
+        return res.result.persons || []
+      }
+      this._removeJoinedBook(this.globalData.activeBookId)
+      await this._switchToFirstOwnedBook()
+      return this.getPersons()
     }
     const doc = await this._getOwnBookDoc()
     const res = await doc.get()
@@ -292,10 +411,15 @@ App({
   async savePersons(persons) {
     await this.waitForReady()
     if (this.globalData.activeBookSource === 'joined') {
-      await wx.cloud.callFunction({
+      const res = await wx.cloud.callFunction({
         name: 'saveSharedPersons',
         data: { shareCode: this.globalData.activeShareCode, persons }
       })
+      if (!res.result || !res.result.success) {
+        this._removeJoinedBook(this.globalData.activeBookId)
+        await this._switchToFirstOwnedBook()
+        throw new Error((res.result && res.result.message) || '无权限写入共享账本')
+      }
       return
     }
     const doc = await this._getOwnBookDoc()
@@ -494,11 +618,10 @@ App({
     // 只展示未被自己删除的账本
     const owned = (await db.collection('books').where({ ownerOpenid: openid }).orderBy('updateTime', 'desc').get()).data.filter(b => !(b.deletedUsers||[]).includes(openid))
     // joinedBooks 只保留未被自己删除的
-    const joined = this._getStoredJoinedBooks().filter(b => {
-      // 拉取云端账本的 deletedUsers 字段
-      // 这里做一次同步拉取
-      return true // 先不过滤，settings.js 里做
-    })
+    const joined = await this._validateJoinedBooks(owned)
+    if (this.globalData.activeBookSource === 'joined' && !joined.some(b => b.bookId === this.globalData.activeBookId)) {
+      await this._switchToFirstOwnedBook()
+    }
     this.globalData.ownedBooks = owned
     this.globalData.joinedBooks = joined
 
@@ -532,7 +655,11 @@ App({
         shareCode,
         createTime: Date.now(),
         updateTime: Date.now(),
-        ownerOpenid: this.globalData.openid
+        ownerOpenid: this.globalData.openid,
+        approvedUsers: [],
+        pendingUsers: [],
+        cooperators: [],
+        deletedUsers: []
       }
     })
     await this._refreshOwnedBooks()
@@ -573,7 +700,7 @@ App({
   },
 
   // 加入他人账本（只需输入对方的分享码）
-  async joinSharedBook(shareCode) {
+  async joinSharedBook(shareCode, options = {}) {
     const normalizedCode = this._normalizeShareCode(shareCode)
     if (!this._isValidShareCode(normalizedCode)) {
       return { success: false, message: '分享码格式错误' }
@@ -590,6 +717,30 @@ App({
       
       // 已有权限，直接加入
       if (res.result && res.result.success) {
+        // 如果是创建者，切换到自己的账本而不是作为共享模式
+        if (res.result.isOwner) {
+          const bookId = res.result.bookId
+          // 刷新自己的账本列表
+          await this._refreshOwnedBooks()
+          // 切换到自己的账本
+          const ownedBook = this.globalData.ownedBooks.find(b => b._id === bookId)
+          if (ownedBook) {
+            this._setActiveBook({
+              source: 'own',
+              bookId: ownedBook._id,
+              shareCode: ownedBook.shareCode,
+              name: ownedBook.name || '我的账本'
+            })
+            return { 
+              success: true, 
+              isOwner: true,
+              persons: res.result.persons,
+              message: '这是您自己的账本' 
+            }
+          }
+        }
+        
+        // 不是创建者，作为共享账本加入
         const joinedInfo = {
           bookId: res.result.bookId,
           shareCode: normalizedCode,
@@ -602,11 +753,13 @@ App({
           shareCode: joinedInfo.shareCode,
           name: joinedInfo.name
         })
+        this._forgetPendingJoinCode(normalizedCode)
         return { success: true, persons: res.result.persons }
       }
       
       // 需要审批流程
       if (res.result && res.result.needApproval) {
+        this._rememberPendingJoinCode(normalizedCode)
         // 如果已经提交过申请
         if (res.result.hasPending) {
           return { 
@@ -616,6 +769,17 @@ App({
             bookId: res.result.bookId,
             bookName: res.result.bookName,
             message: '您的加入申请正在等待创建者审批，请耐心等待' 
+          }
+        }
+
+        if (options.skipRequest) {
+          return {
+            success: false,
+            needApproval: true,
+            hasPending: false,
+            bookId: res.result.bookId,
+            bookName: res.result.bookName,
+            message: '仍需创建者审批'
           }
         }
         
@@ -629,6 +793,7 @@ App({
         console.log('requestJoinBook 返回结果：', requestRes)
         
         if (requestRes.result && requestRes.result.success) {
+          this._rememberPendingJoinCode(normalizedCode)
           return { 
             success: false,
             needApproval: true,
@@ -673,4 +838,3 @@ App({
     })
   }
 })
-

@@ -16,7 +16,7 @@ Page({
     form: {
       event: '婚礼',
       date: '',
-      type: 'in'
+      type: 'out'
     },
     rows: [],
     submitting: false

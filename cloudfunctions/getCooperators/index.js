@@ -2,6 +2,26 @@
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+async function resolveAvatarUrls(users) {
+  const fileIDs = [...new Set(users
+    .map(user => user && user.avatarUrl)
+    .filter(url => typeof url === 'string' && url.startsWith('cloud://')))]
+
+  if (!fileIDs.length) return users
+
+  try {
+    const tempRes = await cloud.getTempFileURL({ fileList: fileIDs })
+    const urlMap = new Map((tempRes.fileList || []).map(item => [item.fileID, item.tempFileURL || '']))
+    return users.map(user => ({
+      ...user,
+      avatarUrl: urlMap.get(user.avatarUrl) || user.avatarUrl || ''
+    }))
+  } catch (e) {
+    console.error('获取头像临时链接失败：', e)
+    return users
+  }
+}
+
 exports.main = async (event, context) => {
   const { bookId } = event
   
@@ -77,10 +97,17 @@ exports.main = async (event, context) => {
     const isOwner = currentOpenid === ownerOpenid
     const isCooperator = cooperators.includes(currentOpenid)
 
+    const resolvedUsers = await resolveAvatarUrls([
+      ...(ownerInfo ? [ownerInfo] : []),
+      ...cooperatorsList
+    ])
+    const resolvedOwner = ownerInfo ? resolvedUsers[0] : null
+    const resolvedCooperators = ownerInfo ? resolvedUsers.slice(1) : resolvedUsers
+
     return {
       success: true,
-      owner: ownerInfo,
-      cooperators: cooperatorsList,
+      owner: resolvedOwner,
+      cooperators: resolvedCooperators,
       totalCount: cooperatorsList.length + (ownerInfo ? 1 : 0),
       currentUserRole: isOwner ? 'owner' : (isCooperator ? 'cooperator' : 'none')
     }

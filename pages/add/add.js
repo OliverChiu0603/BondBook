@@ -19,7 +19,7 @@ Page({
       name: '',
       event: '婚礼',
       date: '',
-      type: 'in',
+      type: 'out',
       amount: '',
       note: ''
     }

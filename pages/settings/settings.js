@@ -1,4 +1,4 @@
-// pages/settings/settings.js
+﻿// pages/settings/settings.js
 const app = getApp()
 
 Page({
@@ -17,8 +17,17 @@ Page({
     cooperatorsModalVisible: false,
     cooperatorsList: [],
     currentUserRole: 'none',
+    pendingUsersModalVisible: false,
+    pendingUsersList: [],
     feedbackVisible: false,
     feedbackText: '',
+    profileEditorVisible: false,
+    profileDraft: {
+      avatarUrl: '',
+      nickName: ''
+    },
+    avatarTempPath: '',
+    savingUserInfo: false,
     theme: 'orange',
     primaryColor: '#FF6B35',
     primaryLight: '#FFF0EB'
@@ -29,17 +38,29 @@ Page({
     this._applyTheme(saved)
   },
 
+  noop() {},
+
   async onShow() {
     await app.waitForReady()
+    const syncRes = await app.syncPendingJoinRequests()
+    if (syncRes.joined) {
+      wx.showToast({ title: '共享账本已加入', icon: 'success' })
+    }
     const saved = wx.getStorageSync('theme') || 'orange'
     this._applyTheme(saved)
     
     // 获取用户信息
     const userInfo = await app.getUserInfo()
     const openid = app.globalData.openid
+    const savedNickName = userInfo && userInfo.nickName && userInfo.nickName !== '微信用户' ? userInfo.nickName : ''
+    const profileDraft = {
+      avatarUrl: userInfo && userInfo.avatarUrl ? userInfo.avatarUrl : '',
+      nickName: savedNickName
+    }
     this.setData({
       userInfo: userInfo ? { ...userInfo, openid } : null,
-      hasUserInfo: !!userInfo
+      hasUserInfo: !!userInfo,
+      profileDraft
     })
     
     await this._refreshBookState()
@@ -50,24 +71,7 @@ Page({
     const summary = await app.getBookSummaries()
     const code = await app.getMyShareCode()
     const isSharedMode = app.isCurrentSharedMode()
-    const openid = app.globalData.openid
-    // joinedBooks 需要拉取云端 deletedUsers 字段
-    const db = wx.cloud.database()
-    const joinedBooks = []
-    for (const b of summary.joined) {
-      try {
-        const doc = await db.collection('books').doc(b.bookId).get()
-        if (!(doc.data.deletedUsers||[]).includes(openid)) {
-          joinedBooks.push({ 
-            source: 'joined',
-            bookId: b.bookId,
-            shareCode: b.shareCode,
-            name: b.name,
-            deletedUsers: doc.data.deletedUsers||[] 
-          })
-        }
-      } catch(e) {}
-    }
+    const joinedBooks = summary.joined
     const books = [...summary.owned, ...joinedBooks]
     this.setData({
       myShareCode: code,
@@ -295,7 +299,7 @@ Page({
         this.setData({ shareModalVisible: false })
         wx.showModal({
           title: res.hasPending ? '等待审批' : '申请已提交',
-          content: `账本"${res.bookName || '共享账本'}"需要创建者审批后才能访问。\n\n创建者可以在"设置 - 待审批加入请求"中处理您的申请。\n\n批准后，请重新输入相同的分享码即可加入账本。`,
+          content: `账本"${res.bookName || '共享账本'}"需要创建者审批后才能访问。\n\n创建者可以在"设置 - 待审批加入请求"中处理您的申请。\n\n批准后，您再次打开小程序或切回本页时会自动加入。`,
           showCancel: false,
           confirmText: '知道了'
         })
@@ -487,50 +491,92 @@ Page({
 
   // ---- 用户信息管理 ----
   async onLogin() {
-    try {
-      const res = await wx.getUserProfile({
-        desc: '用于显示用户信息和账本分享功能'
-      })
-      
-      wx.showLoading({ title: '登录中' })
-      
-      // 保存用户信息到云端
-      const userInfo = {
-        avatarUrl: res.userInfo.avatarUrl,
-        nickName: res.userInfo.nickName
-      }
-      
-      await app.updateUserInfo(userInfo)
-      
-      // 获取openid并更新显示
-      const openid = app.globalData.openid
-      this.setData({
-        userInfo: { ...userInfo, openid },
-        hasUserInfo: true
-      })
-      
-      wx.hideLoading()
-      wx.showToast({ title: '登录成功', icon: 'success' })
-    } catch (e) {
-      wx.hideLoading()
-      console.error('登录失败：', e)
-      if (e.errMsg && e.errMsg.includes('getUserProfile:fail auth deny')) {
-        wx.showToast({ title: '您取消了授权', icon: 'none' })
-      } else {
-        wx.showToast({ title: '登录失败，请重试', icon: 'none' })
-      }
-    }
+    this.onRefreshUserInfo()
   },
 
   async onRefreshUserInfo() {
-    wx.showModal({
-      title: '更新用户信息',
-      content: '需要重新授权获取您的头像和昵称',
-      confirmText: '确定',
-      success: async (res) => {
-        if (res.confirm) {
-          await this.onLogin()
-        }
+    const current = this.data.userInfo || {}
+    const nickName = current.nickName && current.nickName !== '微信用户'
+      ? current.nickName
+      : (this.data.profileDraft.nickName || '')
+    this.setData({
+      profileEditorVisible: true,
+      avatarTempPath: '',
+      profileDraft: {
+        avatarUrl: current.avatarUrl || this.data.profileDraft.avatarUrl || '',
+        nickName
+      }
+    })
+  },
+
+  onChooseAvatar(e) {
+    const avatarUrl = e.detail && e.detail.avatarUrl
+    if (!avatarUrl) return
+    this.setData({
+      avatarTempPath: avatarUrl,
+      'profileDraft.avatarUrl': avatarUrl
+    })
+  },
+
+  onNicknameInput(e) {
+    this.setData({
+      'profileDraft.nickName': e.detail.value
+    })
+  },
+
+  async onSaveUserProfile() {
+    if (this.data.savingUserInfo) return
+
+    const openid = app.globalData.openid || ''
+    const nickName = String(this.data.profileDraft.nickName || '').trim() || `用户${openid.slice(-4) || '0000'}`
+
+    this.setData({ savingUserInfo: true })
+    wx.showLoading({ title: '保存中' })
+
+    try {
+      let avatarUrl = this.data.profileDraft.avatarUrl || ''
+      if (this.data.avatarTempPath) {
+        const extMatch = this.data.avatarTempPath.match(/\.(jpg|jpeg|png|webp)$/i)
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg'
+        const uploadRes = await wx.cloud.uploadFile({
+          cloudPath: `avatars/${openid}_${Date.now()}.${ext}`,
+          filePath: this.data.avatarTempPath
+        })
+        avatarUrl = uploadRes.fileID
+      }
+
+      const userInfo = { avatarUrl, nickName }
+      const savedUserInfo = await app.updateUserInfo(userInfo)
+
+      this.setData({
+        userInfo: { ...savedUserInfo, openid },
+        hasUserInfo: true,
+        profileDraft: {
+          avatarUrl: savedUserInfo.avatarUrl || '',
+          nickName: savedUserInfo.nickName || ''
+        },
+        avatarTempPath: '',
+        profileEditorVisible: false
+      })
+
+      wx.showToast({ title: '已保存', icon: 'success' })
+    } catch (e) {
+      console.error('保存用户信息失败：', e)
+      wx.showToast({ title: '保存失败，请重试', icon: 'none' })
+    } finally {
+      wx.hideLoading()
+      this.setData({ savingUserInfo: false })
+    }
+  },
+
+  onCancelProfileEdit() {
+    const current = this.data.userInfo || {}
+    this.setData({
+      profileEditorVisible: false,
+      avatarTempPath: '',
+      profileDraft: {
+        avatarUrl: current.avatarUrl || '',
+        nickName: current.nickName || ''
       }
     })
   },
@@ -547,6 +593,7 @@ Page({
           try {
             // 清除应用全局数据中的用户信息
             app.globalData.userInfo = null
+            wx.removeStorageSync('user_info')
             
             // 更新当前页面状态
             this.setData({
@@ -728,20 +775,45 @@ Page({
         return
       }
       
-      const itemList = pendingUsers.map(u => `${u.nickName || '微信用户'} (${u.openid.slice(-6)})`)
-      
-      wx.showActionSheet({
-        itemList,
-        success: async (actionRes) => {
-          const selectedUser = pendingUsers[actionRes.tapIndex]
-          this._showRequestActions(selectedUser)
-        }
+      this.setData({
+        pendingUsersList: pendingUsers,
+        pendingUsersModalVisible: true
       })
     } catch (e) {
       wx.hideLoading()
       console.error('调用getPendingRequests失败：', e)
       wx.showToast({ title: '网络错误，请检查网络连接', icon: 'none', duration: 2000 })
     }
+  },
+
+  onClosePendingUsersModal() {
+    this.setData({ pendingUsersModalVisible: false })
+  },
+
+  onApprovePendingUser(e) {
+    const { openid, nickname } = e.currentTarget.dataset
+    this._handlePendingRequest(openid, nickname, 'approve')
+  },
+
+  onRejectPendingUser(e) {
+    const { openid, nickname } = e.currentTarget.dataset
+    this._handlePendingRequest(openid, nickname, 'reject')
+  },
+
+  _handlePendingRequest(openid, nickname, action) {
+    const actionText = action === 'approve' ? '批准' : '拒绝'
+    wx.showModal({
+      title: `${actionText}加入请求`,
+      content: `确定要${actionText}用户"${nickname || '微信用户'}"的加入请求吗？`,
+      confirmText: actionText,
+      confirmColor: action === 'approve' ? this.data.primaryColor : '#f44336',
+      success: async (res) => {
+        if (res.confirm) {
+          await this._handleRequest(openid, action)
+          this.setData({ pendingUsersModalVisible: false })
+        }
+      }
+    })
   },
 
   _showRequestActions(user) {

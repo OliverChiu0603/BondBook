@@ -3,9 +3,12 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 exports.main = async (event, context) => {
-  const { shareCode } = event
+  const shareCode = String(event.shareCode || '').trim().toUpperCase()
   if (!shareCode) {
     return { success: false, message: '分享码不能为空' }
+  }
+  if (!/^[A-Z0-9]{6}$/.test(shareCode)) {
+    return { success: false, message: '分享码格式错误' }
   }
 
   const db = cloud.database()
@@ -43,7 +46,8 @@ exports.main = async (event, context) => {
 
   // 检查是否已经被批准
   const approvedUsers = book.approvedUsers || []
-  if (approvedUsers.includes(openid)) {
+  const deletedUsers = book.deletedUsers || []
+  if (approvedUsers.includes(openid) && !deletedUsers.includes(openid)) {
     return { success: false, message: '您已经有访问权限' }
   }
 

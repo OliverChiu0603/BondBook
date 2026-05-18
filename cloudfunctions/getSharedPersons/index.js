@@ -44,7 +44,9 @@ exports.main = async (event, context) => {
 
   // 检查是否在已批准用户列表中
   const approvedUsers = book.approvedUsers || []
-  if (!approvedUsers.includes(openid)) {
+  const deletedUsers = book.deletedUsers || []
+  const isApproved = approvedUsers.includes(openid) && !deletedUsers.includes(openid)
+  if (!isApproved) {
     // 检查是否已经提交过申请
     const pendingUsers = book.pendingUsers || []
     const hasPending = pendingUsers.some(u => u.openid === openid)
@@ -64,6 +66,7 @@ exports.main = async (event, context) => {
   // 自动追踪到协作者列表
   await db.collection('books').doc(book._id).update({
     data: {
+      deletedUsers: db.command.pull(openid),
       cooperators: db.command.addToSet(openid)
     }
   })

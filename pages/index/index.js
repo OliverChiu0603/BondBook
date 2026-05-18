@@ -15,6 +15,8 @@ Page({
     showLoginGuide: false,
     hasUserInfo: false,
     showAddMenu: false,
+    showOutStatsModal: false,
+    outStatsYears: [],
     showJoinBookModal: false,
     joinBookShareCode: '',
     primaryColor: '#FF6B35',
@@ -51,22 +53,30 @@ Page({
 
   async _autoJoin(code) {
     await app.waitForReady()
-    // 如果已经在查看同一个账本，无需重复加入
-    if (app.globalData.activeShareCode === code && app.isCurrentSharedMode()) {
-      this.loadPersons()
-      return
+    // 如果已经在查看同一个账本（且不是自己的账本），无需重复加入
+    if (app.globalData.activeShareCode === code) {
+      if (app.isCurrentSharedMode()) {
+        // 已经在共享模式查看这个账本
+        this.loadPersons()
+        return
+      }
+      // 如果是自己的账本，允许重新加载（可能需要切换模式）
     }
-    wx.showLoading({ title: '加入账本中...' })
+    wx.showLoading({ title: '加载中...' })
     try {
       const res = await app.joinSharedBook(code)
       wx.hideLoading()
       
       if (res.success) {
-        wx.showToast({ title: '已加入共享账本', icon: 'success' })
+        if (res.isOwner) {
+          wx.showToast({ title: '已切换到您的账本', icon: 'success' })
+        } else {
+          wx.showToast({ title: '已加入共享账本', icon: 'success' })
+        }
       } else if (res.needApproval) {
         wx.showModal({
           title: res.hasPending ? '等待审批' : '申请已提交',
-          content: `账本"${res.bookName || '共享账本'}"需要创建者审批后才能访问。\n\n创建者可以在"设置 - 待审批加入请求"中处理您的申请。\n\n批准后，请重新扫码或输入分享码即可加入。`,
+          content: `账本"${res.bookName || '共享账本'}"需要创建者审批后才能访问。\n\n创建者可以在"设置 - 待审批加入请求"中处理您的申请。\n\n批准后，您再次打开小程序或切回本页时会自动加入。`,
           showCancel: false
         })
       } else {
@@ -90,8 +100,12 @@ Page({
       this.loadPersons()
     }
   },
-  onShow() {
+  async onShow() {
     this._loadTheme()
+    const syncRes = await app.syncPendingJoinRequests()
+    if (syncRes.joined) {
+      wx.showToast({ title: '共享账本已加入', icon: 'success' })
+    }
     this.loadPersons()
   },
 
@@ -106,8 +120,8 @@ Page({
     this.setData({ loading: true })
     try {
       await app.waitForReady()
-      const isSharedMode = app.isCurrentSharedMode()
       const persons = await app.getPersons()
+      const isSharedMode = app.isCurrentSharedMode()
 
       let totalOut = 0, totalIn = 0
       const enriched = persons.map(p => {
@@ -126,7 +140,14 @@ Page({
       // 按最近修改时间降序排序（最新的在前面）
       enriched.sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0))
 
-      this.setData({ persons: enriched, totalOut, totalIn, personCount: persons.length, isSharedMode })
+      this.setData({
+        persons: enriched,
+        totalOut,
+        totalIn,
+        personCount: persons.length,
+        isSharedMode,
+        outStatsYears: this._buildMonthlyStats(persons, 'out')
+      })
       this.applyFilter(enriched)
     } catch (e) {
       wx.showToast({ title: '加载失败，请检查网络', icon: 'none' })
@@ -159,6 +180,75 @@ Page({
   onPersonTap(e) {
     wx.navigateTo({ url: `/pages/detail/detail?id=${e.currentTarget.dataset.id}` })
   },
+
+  _getRecordTime(record) {
+    if (record.date && /^\d{4}-\d{1,2}-\d{1,2}$/.test(record.date)) {
+      const [year, month] = record.date.split('-')
+      return { year, month: month.padStart(2, '0') }
+    }
+    const time = Number(record.createTime || record.updateTime || 0)
+    if (time) {
+      const date = new Date(time)
+      return {
+        year: String(date.getFullYear()),
+        month: String(date.getMonth() + 1).padStart(2, '0')
+      }
+    }
+    return { year: '未设置', month: '未设置' }
+  },
+
+  _buildMonthlyStats(persons, type) {
+    const yearMap = new Map()
+    ;(persons || []).forEach(person => {
+      ;(person.records || []).forEach(record => {
+        if (record.type !== type) return
+        const amount = Number(record.amount) || 0
+        if (!amount) return
+
+        const { year, month } = this._getRecordTime(record)
+        if (!yearMap.has(year)) {
+          yearMap.set(year, { year, total: 0, count: 0, monthMap: new Map() })
+        }
+        const yearItem = yearMap.get(year)
+        const monthKey = `${year}-${month}`
+        if (!yearItem.monthMap.has(monthKey)) {
+          yearItem.monthMap.set(monthKey, {
+            key: monthKey,
+            month: month === '未设置' ? '日期未设置' : `${Number(month)}月`,
+            total: 0,
+            count: 0
+          })
+        }
+        const monthItem = yearItem.monthMap.get(monthKey)
+        yearItem.total += amount
+        yearItem.count += 1
+        monthItem.total += amount
+        monthItem.count += 1
+      })
+    })
+
+    return [...yearMap.values()]
+      .map(item => ({
+        year: item.year,
+        total: item.total,
+        count: item.count,
+        months: [...item.monthMap.values()].sort((a, b) => b.key.localeCompare(a.key))
+      }))
+      .sort((a, b) => b.year.localeCompare(a.year))
+  },
+
+  onSummaryOutTap() {
+    this.setData({
+      outStatsYears: this._buildMonthlyStats(this.data.persons, 'out'),
+      showOutStatsModal: true
+    })
+  },
+
+  onCloseOutStatsModal() {
+    this.setData({ showOutStatsModal: false })
+  },
+
+  stopPropagation() {},
 
   onAddTap() {
     this.setData({ showAddMenu: true })
@@ -263,10 +353,9 @@ Page({
       return
     }
 
-    // 检查是否是自己的账本
-    const myShareCode = await app.getMyShareCode()
-    if (code === myShareCode) {
-      wx.showToast({ title: '不能加入自己的账本', icon: 'none' })
+    // 检查分享码是否为空
+    if (!code || code.trim().length === 0) {
+      wx.showToast({ title: '请输入分享码', icon: 'none' })
       return
     }
 
@@ -276,7 +365,11 @@ Page({
       wx.hideLoading()
       
       if (result.success) {
-        wx.showToast({ title: '加入成功', icon: 'success' })
+        if (result.isOwner) {
+          wx.showToast({ title: '已切换到您的账本', icon: 'success' })
+        } else {
+          wx.showToast({ title: '加入成功', icon: 'success' })
+        }
         // 关闭弹窗并刷新人员列表
         this.setData({ showJoinBookModal: false })
         this.loadPersons()
@@ -285,7 +378,7 @@ Page({
         this.setData({ showJoinBookModal: false })
         wx.showModal({
           title: result.hasPending ? '等待审批' : '申请已提交',
-          content: `账本"${result.bookName || '共享账本'}"需要创建者审批后才能访问。\n\n创建者可以在"设置 - 待审批加入请求"中处理您的申请。\n\n批准后，请重新输入相同的分享码即可加入账本。`,
+          content: `账本"${result.bookName || '共享账本'}"需要创建者审批后才能访问。\n\n创建者可以在"设置 - 待审批加入请求"中处理您的申请。\n\n批准后，您再次打开小程序或切回本页时会自动加入。`,
           showCancel: false,
           confirmText: '知道了'
         })
@@ -382,4 +475,3 @@ Page({
     })
   }
 })
-

@@ -37,6 +37,8 @@ exports.main = async (event, context) => {
     await db.collection('books').doc(bookId).update({
       data: {
         pendingUsers: newPendingUsers,
+        deletedUsers: db.command.pull(requestOpenid),
+        cooperators: db.command.addToSet(requestOpenid),
         approvedUsers: db.command.addToSet(requestOpenid)
       }
     })

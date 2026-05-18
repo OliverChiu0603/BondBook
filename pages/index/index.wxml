@@ -13,7 +13,7 @@
       <text class="summary-amount">{{personCount}} 人</text>
     </view>
     <view class="summary-divider"></view>
-    <view class="summary-item">
+    <view class="summary-item summary-item-tappable" bindtap="onSummaryOutTap">
       <text class="summary-label">累计送出</text>
       <text class="summary-amount">¥{{totalOut}}</text>
     </view>
@@ -117,6 +117,45 @@
   <!-- 悬浮添加按钮（共享模式下隐藏）-->
   <view class="fab" style="background:{{primaryColor}};" bindtap="onAddTap" wx:if="{{!isSharedMode}}">
     <text class="fab-icon">+</text>
+  </view>
+
+  <view class="stats-modal-mask" wx:if="{{showOutStatsModal}}" catchtap="onCloseOutStatsModal">
+    <view class="stats-modal-box" catchtap="stopPropagation">
+      <view class="stats-modal-header">
+        <view>
+          <text class="stats-modal-title">累计送出</text>
+          <text class="stats-modal-subtitle">按年份、月份汇总</text>
+        </view>
+        <text class="stats-modal-close" catchtap="onCloseOutStatsModal">×</text>
+      </view>
+
+      <view class="stats-total-row" style="background:{{primaryLight}};">
+        <text class="stats-total-label">全部送出</text>
+        <text class="stats-total-value" style="color:{{primaryColor}};">¥{{totalOut}}</text>
+      </view>
+
+      <scroll-view class="stats-year-list" scroll-y>
+        <view wx:if="{{outStatsYears.length === 0}}" class="stats-empty">
+          <text>暂无送出记录</text>
+        </view>
+        <view class="stats-year-card" wx:for="{{outStatsYears}}" wx:key="year">
+          <view class="stats-year-header">
+            <text class="stats-year-title">{{item.year}}年</text>
+            <view class="stats-year-summary">
+              <text>{{item.count}}笔</text>
+              <text class="stats-year-amount">¥{{item.total}}</text>
+            </view>
+          </view>
+          <view class="stats-month-row" wx:for="{{item.months}}" wx:key="key" wx:for-item="month">
+            <text class="stats-month-name">{{month.month}}</text>
+            <view class="stats-month-summary">
+              <text>{{month.count}}笔</text>
+              <text class="stats-month-amount">¥{{month.total}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
   </view>
 
   <!-- 登录引导弹窗 -->

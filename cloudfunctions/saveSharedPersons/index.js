@@ -50,14 +50,22 @@ exports.main = async (event, context) => {
   }
 
 
-  const docId = booksRes.data[0]._id
+  const book = booksRes.data[0]
+  const docId = book._id
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
+  const approvedUsers = book.approvedUsers || []
+  const deletedUsers = book.deletedUsers || []
+  const canWrite = openid === book.ownerOpenid || (approvedUsers.includes(openid) && !deletedUsers.includes(openid))
+  if (!canWrite) {
+    return { success: false, message: '无权限写入此账本，请先等待创建者批准' }
+  }
+
   await db.collection('books').doc(docId).update({
     data: {
       persons,
       updateTime: Date.now(),
-      cooperators: openid ? db.command.addToSet(openid) : undefined
+      cooperators: openid && openid !== book.ownerOpenid ? db.command.addToSet(openid) : undefined
     }
   })
 

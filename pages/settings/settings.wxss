@@ -114,6 +114,106 @@
   background: #FFF0EB;
 }
 
+.profile-editor {
+  padding: 0 28rpx 28rpx;
+}
+
+.profile-avatar-button {
+  width: 100%;
+  padding: 20rpx 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  line-height: 1;
+}
+
+.profile-avatar-button::after {
+  border: 0;
+}
+
+.profile-avatar-preview,
+.profile-avatar-placeholder {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+
+.profile-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-avatar-text {
+  color: #333;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.profile-nickname-row {
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  border-top: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.profile-label {
+  width: 96rpx;
+  color: #666;
+  font-size: 28rpx;
+  flex-shrink: 0;
+}
+
+.profile-nickname-input {
+  flex: 1;
+  min-width: 0;
+  height: 88rpx;
+  color: #333;
+  font-size: 28rpx;
+}
+
+.profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  padding-top: 20rpx;
+}
+
+.profile-button {
+  min-width: 132rpx;
+  height: 64rpx;
+  line-height: 1;
+  padding: 0 28rpx;
+  margin: 0;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-button::after {
+  border: 0;
+}
+
+.profile-button-secondary {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.profile-button-primary {
+  background: #FF6B35;
+  color: #fff;
+}
+
 /* 璇锋眰寰界珷 */
 .request-badge {
   min-width: 36rpx;
@@ -448,6 +548,16 @@
   background: #f5f5f5;
 }
 
+.cooperator-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cooperator-avatar-icon {
+  font-size: 36rpx;
+}
+
 .cooperator-info {
   flex: 1;
   min-width: 0;
@@ -507,5 +617,42 @@
 .action-remove {
   font-size: 26rpx;
   color: #f44336;
+}
+
+/* ── 待审批列表 ── */
+.pending-badge {
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  color: #fff;
+  background: #ff9800;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pending-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-left: 16rpx;
+  flex-shrink: 0;
+}
+
+.action-reject,
+.action-approve {
+  padding: 8rpx 20rpx;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  white-space: nowrap;
+}
+
+.action-reject {
+  color: #666;
+  border: 1rpx solid #ddd;
+  background: #fff;
+}
+
+.action-approve {
+  color: #fff;
+  background: #FF6B35;
 }
 
