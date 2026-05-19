@@ -12,6 +12,8 @@ Page({
     personCount: 0,
     loading: false,
     isSharedMode: false,
+    myShareCode: '',
+    currentBookName: '',
     showLoginGuide: false,
     hasUserInfo: false,
     showAddMenu: false,
@@ -25,6 +27,11 @@ Page({
   },
 
   async onLoad(options) {
+    wx.showShareMenu({
+      withShareTicket: true,
+      menus: ['shareAppMessage', 'shareTimeline']
+    })
+
     // 检查用户登录状态
     await this._checkUserLogin()
     
@@ -106,7 +113,20 @@ Page({
     if (syncRes.joined) {
       wx.showToast({ title: '共享账本已加入', icon: 'success' })
     }
+    await this._refreshShareState()
     this.loadPersons()
+  },
+
+  async _refreshShareState() {
+    try {
+      const summary = await app.getBookSummaries()
+      this.setData({
+        myShareCode: summary.current.shareCode || '',
+        currentBookName: summary.current.name || ''
+      })
+    } catch (e) {
+      console.error('刷新分享信息失败：', e)
+    }
   },
 
   _loadTheme() {
@@ -473,5 +493,21 @@ Page({
       icon: 'none',
       duration: 2000
     })
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '礼簿 BondBook',
+      path: '/pages/index/index',
+      imageUrl: ''
+    }
+  },
+
+  onShareTimeline() {
+    return {
+      title: '礼簿 BondBook',
+      query: '',
+      imageUrl: ''
+    }
   }
 })

@@ -417,12 +417,24 @@ Page({
   },
 
   // 分享给好友（open-type="share" 按钮触发此钩子）
-  onShareAppMessage() {
-    const code = this.data.myShareCode
+  onShareAppMessage(options = {}) {
+    const shareType = options.target && options.target.dataset
+      ? options.target.dataset.shareType
+      : 'app'
+
+    if (shareType === 'book') {
+      const code = this.data.myShareCode
+      return {
+        title: `邀请你加入「${this.data.currentBookName || '人情账本'}」，分享码：${code}`,
+        path: `/pages/index/index?joinCode=${code}`,
+        imageUrl: ''
+      }
+    }
+
     return {
-      title: `邀请你加入「${this.data.currentBookName || '人情账本'}」，分享码：${code}`,
-      path: `pages/index/index?joinCode=${code}`,
-      imageUrl: '' // 留空使用默认截图
+      title: '礼簿 BondBook',
+      path: '/pages/index/index',
+      imageUrl: ''
     }
   },
 

@@ -157,8 +157,25 @@
     <button
       class="share-app-btn"
       style="background:{{primaryColor}};"
+      data-share-type="app"
       open-type="share"
     >📤 分享小程序</button>
+  </view>
+
+  <view class="card share-app-card share-book-card">
+    <view class="share-app-desc">
+      <text class="share-app-icon">📖</text>
+      <view class="share-app-text">
+        <text class="share-app-title">分享账本给好友</text>
+        <text class="share-app-sub">好友点击后可申请加入当前账本</text>
+      </view>
+    </view>
+    <button
+      class="share-app-btn share-book-btn"
+      style="border-color:{{primaryColor}};color:{{primaryColor}};"
+      data-share-type="book"
+      open-type="share"
+    >分享账本</button>
   </view>
 
   <!-- 数据管理 -->
@@ -210,7 +227,7 @@
   <view class="card">
     <view class="cell">
       <text class="cell-label">版本</text>
-      <text class="cell-value">2.0.0</text>
+      <text class="cell-value">2.1.1</text>
     </view>
     <view class="cell-divider"></view>
     <view class="cell" bindtap="onFeedback">
@@ -277,6 +294,7 @@
       <button
         class="share-friend-btn"
         style="background:{{primaryColor}};"
+        data-share-type="book"
         open-type="share"
       >📤 发送给朋友</button>
       <text class="share-hint">好友点击链接后直接加入你的账本</text>
