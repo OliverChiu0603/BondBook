@@ -44,8 +44,12 @@
 
   <!-- 人员列表 -->
   <view class="person-list">
+    <view wx:if="{{loading && filteredPersons.length === 0}}" class="empty-tip">
+      <text class="empty-text">正在加载数据...</text>
+    </view>
+
     <!-- 新用户引导卡片 -->
-    <view wx:if="{{filteredPersons.length === 0 && personCount === 0}}" class="empty-guide-card">
+    <view wx:if="{{!loading && filteredPersons.length === 0 && personCount === 0}}" class="empty-guide-card">
       <view class="empty-guide-icon">👋</view>
       <text class="empty-guide-title">欢迎使用礼簿BondBook</text>
       <text class="empty-guide-desc">开始记录您的人情往来</text>
@@ -75,7 +79,7 @@
     </view>
 
     <!-- 搜索无结果提示 -->
-    <view wx:if="{{filteredPersons.length === 0 && personCount > 0}}" class="empty-tip">
+    <view wx:if="{{!loading && filteredPersons.length === 0 && personCount > 0}}" class="empty-tip">
       <text class="empty-icon">🔍</text>
       <text class="empty-text">未找到相关记录</text>
     </view>

@@ -78,7 +78,11 @@
     </view>
   </view>
 
-  <view wx:if="{{personCount === 0}}" class="empty-tip">
+  <view wx:if="{{loading}}" class="empty-tip">
+    <text class="empty-text">正在加载统计数据...</text>
+  </view>
+
+  <view wx:elif="{{personCount === 0}}" class="empty-tip">
     <text class="empty-icon">📊</text>
     <text class="empty-text">暂无数据，快去添加记录吧</text>
   </view>

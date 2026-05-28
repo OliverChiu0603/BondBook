@@ -1,6 +1,8 @@
 // app.js
 
 const ENV_ID = 'cloud1-d3g4pqwwte9f7079d'
+const MAX_USER_RECORDS = 2000
+const USER_RECORD_LIMIT_MESSAGE = `添加失败：用户数据不能超过${MAX_USER_RECORDS}条，请删除部分数据后再添加`
 
 const THEMES = {
   orange: {
@@ -389,6 +391,122 @@ App({
   },
 
   // ---- 基础存取（自动区分自己 / 共享模式）----
+  async _getAll(collectionName, where, orderField, orderDirection = 'desc') {
+    const db = wx.cloud.database()
+    const pageSize = 100
+    let skip = 0
+    let all = []
+
+    while (true) {
+      let query = db.collection(collectionName).where(where || {})
+      if (orderField) query = query.orderBy(orderField, orderDirection)
+      const res = await query.skip(skip).limit(pageSize).get()
+      const rows = res.data || []
+      all = all.concat(rows)
+      if (rows.length < pageSize) break
+      skip += pageSize
+    }
+
+    return all
+  },
+
+  async _getSplitPersons(bookId) {
+    const [personDocs, recordDocs] = await Promise.all([
+      this._getAll('book_persons', { bookId }, 'updateTime', 'desc'),
+      this._getAll('book_records', { bookId }, 'createTime', 'desc')
+    ])
+    const recordsByPerson = new Map()
+
+    recordDocs.forEach(doc => {
+      const list = recordsByPerson.get(doc.personId) || []
+      list.push({
+        id: doc.recordId,
+        event: doc.event,
+        date: doc.date,
+        type: doc.type,
+        amount: doc.amount,
+        note: doc.note || '',
+        createTime: doc.createTime,
+        updateTime: doc.updateTime
+      })
+      recordsByPerson.set(doc.personId, list)
+    })
+
+    return personDocs.map(doc => ({
+      id: doc.personId,
+      name: doc.name,
+      linkedPersonIds: doc.linkedPersonIds || [],
+      records: recordsByPerson.get(doc.personId) || [],
+      createTime: doc.createTime,
+      updateTime: doc.updateTime
+    }))
+  },
+
+  async _mutateBookData(action, data = {}) {
+    await this.waitForReady()
+    let res = await wx.cloud.callFunction({
+      name: 'bookData',
+      data: {
+        action,
+        bookId: this.globalData.activeBookId,
+        shareCode: this.globalData.activeShareCode,
+        ...data
+      }
+    })
+    let hadMigration = false
+    let migrationExplained = false
+    while (res.result && res.result.success && res.result.needMigration) {
+      hadMigration = true
+      if (!migrationExplained) {
+        migrationExplained = true
+        const shouldContinue = await new Promise(resolve => {
+          wx.showModal({
+            title: '账本升级中',
+            content: '这个账本历史记录较多，正在升级为更稳定的存储方式。升级期间请尽量保持小程序打开；如果现在取消，下次保存会从当前进度继续，不会丢失原数据。',
+            confirmText: '继续升级',
+            cancelText: '稍后再说',
+            showCancel: true,
+            success: modalRes => resolve(!!modalRes.confirm),
+            fail: () => resolve(true)
+          })
+        })
+        if (!shouldContinue) {
+          throw new Error('账本升级已暂停，下次保存会从当前进度继续。')
+        }
+      }
+      const migration = res.result.migration || {}
+      const total = migration.totalPersons || 0
+      const current = Math.min(migration.personIndex || 0, total)
+      wx.showLoading({
+        title: total ? `迁移中 ${current}/${total}` : '迁移中',
+        mask: true
+      })
+      res = await wx.cloud.callFunction({
+        name: 'bookData',
+        data: {
+          action: 'migrateStep',
+          bookId: this.globalData.activeBookId,
+          shareCode: this.globalData.activeShareCode
+        }
+      })
+    }
+    if (hadMigration && action !== 'migrateStep' && res.result && res.result.success) {
+      res = await wx.cloud.callFunction({
+        name: 'bookData',
+        data: {
+          action,
+          bookId: this.globalData.activeBookId,
+          shareCode: this.globalData.activeShareCode,
+          ...data
+        }
+      })
+    }
+    if (!res.result || !res.result.success) {
+      throw new Error((res.result && res.result.message) || '账本数据保存失败')
+    }
+    return res.result
+  },
+
   async getPersons() {
     await this.waitForReady()
     if (this.globalData.activeBookSource === 'joined') {
@@ -405,11 +523,23 @@ App({
     }
     const doc = await this._getOwnBookDoc()
     const res = await doc.get()
-    return res.data.persons || []
+    const book = res.data || {}
+    if (book.storageMode === 'split' || book.personsMigrated) {
+      const dataRes = await this._mutateBookData('getPersons')
+      return dataRes.persons || []
+    }
+    return book.persons || []
   },
 
   async savePersons(persons) {
     await this.waitForReady()
+    if (Array.isArray(persons) && persons.length === 0) {
+      await this._mutateBookData('clear')
+      return
+    }
+    if (this._countRecords(persons) > MAX_USER_RECORDS) {
+      throw new Error(USER_RECORD_LIMIT_MESSAGE)
+    }
     if (this.globalData.activeBookSource === 'joined') {
       const res = await wx.cloud.callFunction({
         name: 'saveSharedPersons',
@@ -426,6 +556,17 @@ App({
     await doc.update({ data: { persons, updateTime: Date.now() } })
   },
 
+  _countRecords(persons) {
+    return (persons || []).reduce((total, person) => {
+      return total + (Array.isArray(person.records) ? person.records.length : 0)
+    }, 0)
+  },
+
+  async getRecordCount() {
+    const persons = await this.getPersons()
+    return this._countRecords(persons)
+  },
+
   // ---- 查询 ----
   async getPersonById(id) {
     const persons = await this.getPersons()
@@ -439,7 +580,6 @@ App({
 
   // ---- 新增 ----
   async addPerson(name, record) {
-    const persons = await this.getPersons()
     const now = Date.now()
     const pid = 'p' + now + Math.random().toString(36).substr(2, 4)
     const rid = 'r' + now + Math.random().toString(36).substr(2, 4)
@@ -451,69 +591,50 @@ App({
       createTime: now,
       updateTime: now
     }
-    persons.unshift(newPerson)
-    await this.savePersons(persons)
+    await this._mutateBookData('addPerson', {
+      person: {
+        id: pid,
+        name: name.trim(),
+        linkedPersonIds: [],
+        createTime: now,
+        updateTime: now
+      },
+      record: { ...record, id: rid, createTime: now }
+    })
     return newPerson
   },
 
   async addRecordToPerson(personId, record) {
-    const persons = await this.getPersons()
-    const idx = persons.findIndex(p => p.id === personId)
-    if (idx === -1) return false
     const now = Date.now()
     const rid = 'r' + now + Math.random().toString(36).substr(2, 4)
-    persons[idx].records.push({ ...record, id: rid, createTime: now })
-    persons[idx].updateTime = now
-    await this.savePersons(persons)
-    return true
+    const res = await this._mutateBookData('addRecord', {
+      personId,
+      record: { ...record, id: rid, createTime: now }
+    })
+    return !!res.success
   },
 
   // ---- 修改 ----
   async batchSetDateForEvent(eventName, date) {
-    const persons = await this.getPersons()
-    const now = Date.now()
-    let anyChanged = false
-    persons.forEach(p => {
-      let personChanged = false
-      p.records.forEach(r => {
-        if (r.event === eventName) {
-          r.date = date
-          r.updateTime = now
-          personChanged = true
-          anyChanged = true
-        }
-      })
-      if (personChanged) p.updateTime = now
-    })
-    if (anyChanged) await this.savePersons(persons)
-    return anyChanged
+    const res = await this._mutateBookData('batchSetDateForEvent', { eventName, date })
+    return !!res.anyChanged
   },
 
   async updateRecord(personId, recordId, data) {
-    const persons = await this.getPersons()
-    const pIdx = persons.findIndex(p => p.id === personId)
-    if (pIdx === -1) return false
-    const rIdx = persons[pIdx].records.findIndex(r => r.id === recordId)
-    if (rIdx === -1) return false
-    const now = Date.now()
-    persons[pIdx].records[rIdx] = { ...persons[pIdx].records[rIdx], ...data, updateTime: now }
-    persons[pIdx].updateTime = now
-    await this.savePersons(persons)
-    return true
+    const res = await this._mutateBookData('updateRecord', { personId, recordId, data })
+    return !!res.success
   },
 
   async updatePersonName(personId, name) {
-    const persons = await this.getPersons()
-    const idx = persons.findIndex(p => p.id === personId)
-    if (idx === -1) return false
-    persons[idx].name = name.trim()
-    persons[idx].updateTime = Date.now()
-    await this.savePersons(persons)
-    return true
+    const res = await this._mutateBookData('updatePersonName', { personId, name: name.trim() })
+    return !!res.success
   },
 
   // ---- 绑定关系 ----
   async setPersonBindings(personId, linkedPersonIds) {
+    const saveRes = await this._mutateBookData('setPersonBindings', { personId, linkedPersonIds })
+    return !!saveRes.success
+
     const persons = await this.getPersons()
     const now = Date.now()
     const ownerIdx = persons.findIndex(p => p.id === personId)
@@ -577,6 +698,9 @@ App({
 
   // ---- 删除 ----
   async deleteRecord(personId, recordId) {
+    const saveRes = await this._mutateBookData('deleteRecord', { personId, recordId })
+    return !!saveRes.success
+
     const persons = await this.getPersons()
     const pIdx = persons.findIndex(p => p.id === personId)
     if (pIdx === -1) return false
@@ -588,6 +712,9 @@ App({
   },
 
   async deletePerson(personId) {
+    const saveRes = await this._mutateBookData('deletePerson', { personId })
+    return !!saveRes.success
+
     const persons = await this.getPersons()
     const now = Date.now()
     const filtered = persons

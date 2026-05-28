@@ -2,6 +2,9 @@
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+const MAX_USER_RECORDS = 2000
+const LIMIT_MESSAGE = `添加失败：用户数据不能超过${MAX_USER_RECORDS}条，请删除部分数据后再添加`
+
 function normalizeShareCode(code) {
   return String(code || '').trim().toUpperCase()
 }
@@ -29,6 +32,10 @@ function isValidPerson(person) {
   return person.records.every(isValidRecord)
 }
 
+function countRecords(persons) {
+  return persons.reduce((total, person) => total + person.records.length, 0)
+}
+
 exports.main = async (event, context) => {
   const shareCode = normalizeShareCode(event.shareCode)
   const { persons } = event
@@ -37,6 +44,7 @@ exports.main = async (event, context) => {
   if (!Array.isArray(persons)) return { success: false, message: '数据格式错误' }
   if (persons.length > 5000) return { success: false, message: '数据量过大' }
   if (!persons.every(isValidPerson)) return { success: false, message: '数据结构校验失败' }
+  if (countRecords(persons) > MAX_USER_RECORDS) return { success: false, message: LIMIT_MESSAGE }
 
   const db = cloud.database()
 

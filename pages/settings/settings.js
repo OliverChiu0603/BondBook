@@ -41,30 +41,39 @@ Page({
   noop() {},
 
   async onShow() {
-    await app.waitForReady()
-    const syncRes = await app.syncPendingJoinRequests()
-    if (syncRes.joined) {
+    wx.showLoading({ title: '加载设置中' })
+    let joinedSharedBook = false
+    try {
+      await app.waitForReady()
+      const syncRes = await app.syncPendingJoinRequests()
+      joinedSharedBook = !!syncRes.joined
+      const saved = wx.getStorageSync('theme') || 'orange'
+      this._applyTheme(saved)
+      
+      // 获取用户信息
+      const userInfo = await app.getUserInfo()
+      const openid = app.globalData.openid
+      const savedNickName = userInfo && userInfo.nickName && userInfo.nickName !== '微信用户' ? userInfo.nickName : ''
+      const profileDraft = {
+        avatarUrl: userInfo && userInfo.avatarUrl ? userInfo.avatarUrl : '',
+        nickName: savedNickName
+      }
+      this.setData({
+        userInfo: userInfo ? { ...userInfo, openid } : null,
+        hasUserInfo: !!userInfo,
+        profileDraft
+      })
+      
+      await this._refreshBookState()
+      await this._loadPendingRequests()
+    } catch (e) {
+      console.error('加载设置失败：', e)
+    } finally {
+      wx.hideLoading()
+    }
+    if (joinedSharedBook) {
       wx.showToast({ title: '共享账本已加入', icon: 'success' })
     }
-    const saved = wx.getStorageSync('theme') || 'orange'
-    this._applyTheme(saved)
-    
-    // 获取用户信息
-    const userInfo = await app.getUserInfo()
-    const openid = app.globalData.openid
-    const savedNickName = userInfo && userInfo.nickName && userInfo.nickName !== '微信用户' ? userInfo.nickName : ''
-    const profileDraft = {
-      avatarUrl: userInfo && userInfo.avatarUrl ? userInfo.avatarUrl : '',
-      nickName: savedNickName
-    }
-    this.setData({
-      userInfo: userInfo ? { ...userInfo, openid } : null,
-      hasUserInfo: !!userInfo,
-      profileDraft
-    })
-    
-    await this._refreshBookState()
-    await this._loadPendingRequests()
   },
 
   async _refreshBookState() {

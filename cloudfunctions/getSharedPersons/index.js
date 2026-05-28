@@ -10,12 +10,90 @@ function isValidShareCode(code) {
   return /^[A-Z0-9]{6}$/.test(code)
 }
 
+async function ensureCollection(db, collectionName) {
+  try {
+    await db.collection(collectionName).limit(1).get()
+  } catch (e) {
+    const message = e && (e.message || e.errMsg || '')
+    if (!message.includes('collection not exists') && !message.includes('DATABASE_COLLECTION_NOT_EXIST')) {
+      throw e
+    }
+
+    try {
+      await db.createCollection(collectionName)
+    } catch (createErr) {
+      const createMessage = createErr && (createErr.message || createErr.errMsg || '')
+      if (!createMessage.includes('already exists') && !createMessage.includes('collection exists')) {
+        throw createErr
+      }
+    }
+  }
+}
+
+async function ensureSplitCollections(db) {
+  await ensureCollection(db, 'book_persons')
+  await ensureCollection(db, 'book_records')
+}
+
+async function queryAll(db, collectionName, where) {
+  const pageSize = 100
+  let skip = 0
+  let all = []
+
+  while (true) {
+    const res = await db.collection(collectionName).where(where || {}).skip(skip).limit(pageSize).get()
+    const rows = res.data || []
+    all = all.concat(rows)
+    if (rows.length < pageSize) break
+    skip += pageSize
+  }
+
+  return all
+}
+
+async function getBookPersons(db, book) {
+  if (book.storageMode !== 'split' && !book.personsMigrated) {
+    return book.persons || []
+  }
+
+  const [personDocs, recordDocs] = await Promise.all([
+    queryAll(db, 'book_persons', { bookId: book._id }),
+    queryAll(db, 'book_records', { bookId: book._id })
+  ])
+  const recordsByPerson = new Map()
+
+  recordDocs.forEach(doc => {
+    const list = recordsByPerson.get(doc.personId) || []
+    list.push({
+      id: doc.recordId,
+      event: doc.event,
+      date: doc.date,
+      type: doc.type,
+      amount: doc.amount,
+      note: doc.note || '',
+      createTime: doc.createTime,
+      updateTime: doc.updateTime
+    })
+    recordsByPerson.set(doc.personId, list)
+  })
+
+  return personDocs.map(doc => ({
+    id: doc.personId,
+    name: doc.name,
+    linkedPersonIds: doc.linkedPersonIds || [],
+    records: recordsByPerson.get(doc.personId) || [],
+    createTime: doc.createTime,
+    updateTime: doc.updateTime
+  }))
+}
+
 exports.main = async (event, context) => {
   const shareCode = normalizeShareCode(event.shareCode)
   if (!shareCode) return { success: false, message: '分享码不能为空' }
   if (!isValidShareCode(shareCode)) return { success: false, message: '分享码格式错误' }
 
   const db = cloud.database()
+  await ensureSplitCollections(db)
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
 
@@ -33,7 +111,7 @@ exports.main = async (event, context) => {
   if (openid === book.ownerOpenid) {
     return {
       success: true,
-      persons: book.persons || [],
+      persons: await getBookPersons(db, book),
       ownerOpenid: book.ownerOpenid,
       shareCode,
       bookId: book._id,
@@ -73,7 +151,7 @@ exports.main = async (event, context) => {
 
   return {
     success: true,
-    persons: book.persons || [],
+    persons: await getBookPersons(db, book),
     ownerOpenid: book.ownerOpenid,
     shareCode,
     bookId: book._id,

@@ -191,7 +191,12 @@ Page({
       }
       setTimeout(() => wx.navigateBack(), 800)
     } catch (e) {
-      wx.showToast({ title: '保存失败，请重试', icon: 'none' })
+      console.error('保存失败详情:', e)
+      wx.showModal({
+        title: '保存失败详情',
+        content: e.message || e.errMsg || JSON.stringify(e),
+        showCancel: false
+      })
     } finally {
       wx.hideLoading()
       this.setData({ submitting: false })

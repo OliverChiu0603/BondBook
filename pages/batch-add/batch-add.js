@@ -2,6 +2,7 @@
 const app = getApp()
 
 const EVENT_TYPES = ['婚礼', '生日', '葬礼', '满月', '乔迁', '升学', '节日', '其他', '自定义']
+const MAX_USER_RECORDS = 2000
 
 function makeRow() {
   return { _key: Date.now() + Math.random(), name: '', amount: '', note: '' }
@@ -157,6 +158,15 @@ Page({
       wx.showToast({ title: '请至少填写一条记录', icon: 'none' })
       return
     }
+    const currentCount = await app.getRecordCount()
+    if (currentCount + validRows.length > MAX_USER_RECORDS) {
+      wx.showModal({
+        title: '添加失败',
+        content: `用户数据不能超过${MAX_USER_RECORDS}条，当前已有${currentCount}条，本次最多还能添加${Math.max(MAX_USER_RECORDS - currentCount, 0)}条。`,
+        showCancel: false
+      })
+      return
+    }
     const { form } = this.data
     wx.showModal({
       title: '批量保存',
@@ -189,7 +199,11 @@ Page({
           setTimeout(() => wx.navigateBack(), 1000)
         } catch (err) {
           wx.hideLoading()
-          wx.showToast({ title: '保存失败，请重试', icon: 'none' })
+          wx.showModal({
+            title: '保存失败',
+            content: err.message || '保存失败，请重试',
+            showCancel: false
+          })
         } finally {
           this.setData({ submitting: false })
         }

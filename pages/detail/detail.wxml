@@ -179,6 +179,10 @@
   </view>
 </view>
 
+<view wx:elif="{{isLoading}}" class="not-found">
+  <text>正在加载...</text>
+</view>
+
 <view wx:else class="not-found">
   <text>记录不存在</text>
 </view>

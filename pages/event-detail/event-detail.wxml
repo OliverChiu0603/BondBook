@@ -71,6 +71,10 @@
     </view>
   </view>
 
+  <view wx:if="{{loading}}" class="empty-tip">
+    <text class="empty-text">正在加载记录...</text>
+  </view>
+
   <!-- 空状态 -->
   <view wx:if="{{filteredRecords.length === 0 && !loading}}" class="empty-tip">
     <text class="empty-text">{{searchKeyword ? '未找到匹配的姓名' : '暂无记录'}}</text>

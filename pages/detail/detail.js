@@ -3,6 +3,7 @@ const app = getApp()
 
 Page({
   data: {
+    isLoading: true,
     person: null,
     totalIn: 0,
     totalOut: 0,
@@ -32,11 +33,15 @@ Page({
   },
 
   async loadPerson() {
+    this.setData({ isLoading: true })
     try {
       await app.waitForReady()
       const persons = await app.getPersons()
       const p = persons.find(item => item.id === this.personId)
-      if (!p) return
+      if (!p) {
+        this.setData({ person: null, isLoading: false })
+        return
+      }
 
       const { totalIn, totalOut } = this._calcPersonStats(p)
       const ownLinks = new Set(p.linkedPersonIds || [])
@@ -56,8 +61,9 @@ Page({
           }
         })
 
-      this.setData({ person: p, totalIn, totalOut, boundPersons })
+      this.setData({ person: p, totalIn, totalOut, boundPersons, isLoading: false })
     } catch (e) {
+      this.setData({ isLoading: false })
       wx.showToast({ title: '加载失败', icon: 'none' })
     }
   },
@@ -140,11 +146,15 @@ Page({
   },
 
   async onOpenBindModal() {
+    wx.showLoading({ title: '加载成员中' })
     try {
       await app.waitForReady()
       const persons = await app.getPersons()
       const current = persons.find(item => item.id === this.personId)
-      if (!current) return
+      if (!current) {
+        wx.showToast({ title: '记录不存在', icon: 'none' })
+        return
+      }
 
       const selectedSet = new Set(current.linkedPersonIds || [])
       const bindCandidates = persons
@@ -168,6 +178,8 @@ Page({
       })
     } catch (e) {
       wx.showToast({ title: '读取成员失败', icon: 'none' })
+    } finally {
+      wx.hideLoading()
     }
   },
 
