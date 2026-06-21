@@ -296,6 +296,10 @@ async function setPersonBindings(bookId, event) {
   const now = Date.now()
   const ownerIdx = persons.findIndex(p => p.id === event.personId)
   if (ownerIdx === -1) throw new Error('人员不存在')
+  const originalLinksById = new Map(persons.map(person => [
+    person.id,
+    [...(person.linkedPersonIds || [])]
+  ]))
 
   const validIds = new Set(persons.map(p => p.id))
   const targetIds = [...new Set((event.linkedPersonIds || [])
@@ -346,13 +350,21 @@ async function setPersonBindings(bookId, event) {
     })
   })
 
-  for (const person of persons) {
+  const changedPersons = persons.filter(person => {
+    const oldLinks = originalLinksById.get(person.id) || []
+    const nextLinks = person.linkedPersonIds || []
+    return person.updateTime === now ||
+      oldLinks.length !== nextLinks.length ||
+      nextLinks.some(id => !oldLinks.includes(id))
+  })
+
+  for (const person of changedPersons) {
     await updatePerson(personDocId(bookId, person.id), {
       linkedPersonIds: person.linkedPersonIds || [],
       updateTime: person.updateTime || now
     })
   }
-  await touchBook(bookId)
+  if (changedPersons.length) await touchBook(bookId)
 }
 
 async function deleteRecord(bookId, event) {

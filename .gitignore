@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Python virtual environments
+.venv/
+venv/
+
+# Generated files
+outputs/
+
+# Editor and OS metadata
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local project settings
+project.private.config.json

@@ -294,7 +294,11 @@ Page({
       await this.loadPerson()
       wx.showToast({ title: '绑定已更新', icon: 'success' })
     } catch (e) {
-      wx.showToast({ title: '保存失败', icon: 'none' })
+      wx.showModal({
+        title: '保存失败',
+        content: e.message || e.errMsg || '绑定关系保存失败，请稍后重试',
+        showCancel: false
+      })
     } finally {
       wx.hideLoading()
     }
